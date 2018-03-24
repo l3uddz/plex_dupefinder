@@ -1,3 +1,3 @@
-PlexAPI==3.0.3
+PlexAPI==3.0.6
 attrdict==2.0.0
 requests
