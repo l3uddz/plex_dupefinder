@@ -1,0 +1,3 @@
+PlexAPI==3.0.3
+attrdict==2.0.0
+requests
