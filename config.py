@@ -16,7 +16,6 @@ base_config = {
                      'flac': 2500, 'dca-ma': 4000, 'truehd': 4500, 'aac': 1000, 'eac3': 1250},
     'SKIP_LIST': [],
     'AUTO_DELETE': False
-
 }
 cfg = None
 
