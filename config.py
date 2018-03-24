@@ -8,10 +8,7 @@ config_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'conf
 base_config = {
     'PLEX_SERVER': 'https://plex.your-server.com',
     'PLEX_TOKEN': '',
-    'PLEX_SECTIONS': {
-        'Movies': 1,
-        'TV': 2
-    },
+    'PLEX_SECTIONS': {},
     'CODEC_SCORES': {'Unknown': 0, 'wmapro': 200, 'mp2': 500, 'mp3': 1000, 'ac3': 1000, 'dca': 2000, 'pcm': 2500,
                      'flac': 2500, 'dca-ma': 4000, 'truehd': 4500, 'aac': 1000, 'eac3': 1250},
     'SKIP_LIST': [],
