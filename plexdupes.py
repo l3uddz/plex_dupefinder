@@ -176,7 +176,7 @@ def delete_item(show_key, media_id):
 # MISC METHODS
 ############################################################
 
-decision_filename = os.path.join(os.path.dirname(sys.argv[0]), 'decisions.log')
+decision_filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'decisions.log')
 
 
 def write_decision(title=None, keeping=None, removed=None):
