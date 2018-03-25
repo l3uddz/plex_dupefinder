@@ -58,25 +58,39 @@ def load_config():
         return AttrConfig(json.load(fp))
 
 
-def upgrade_settings(defaults, current):
+def upgrade_settings(defaults, currents):
     upgraded = False
-    res = current.copy()
-    for k, v in defaults.items():
-        if k not in current:
-            res[k] = v
-            upgraded = True
-            print("Added config option: %s" % k)
 
-        if hasattr(v, 'items'):
-            if k in current:
-                sub_upgrade, res[k] = upgrade_settings(v, current[k])
-                if sub_upgrade:
-                    upgraded = True
-            else:
-                res[k] = v
-                upgraded = True
+    def inner_upgrade(default, current, key=None):
+        sub_upgraded = False
+        merged = current.copy()
+        if isinstance(default, dict):
+            for k, v in default.items():
+                # missing k
+                if k not in current:
+                    merged[k] = v
+                    sub_upgraded = True
+                    if not key:
+                        print("Added %r config option: %s" % (str(k), str(v)))
+                    else:
+                        print("Added %r to config option %r: %s" % (str(k), str(key), str(v)))
+                    continue
+                # iterate children
+                if isinstance(v, dict) or isinstance(v, list):
+                    did_upgrade, merged[k] = inner_upgrade(default[k], current[k], key=k)
+                    sub_upgraded = did_upgrade if did_upgrade else sub_upgraded
 
-    return upgraded, AttrConfig(res)
+        elif isinstance(default, list) and key:
+            for v in default:
+                if v not in current:
+                    merged.append(v)
+                    sub_upgraded = True
+                    print("Added to config option %r: %s" % (str(key), str(v)))
+                    continue
+        return sub_upgraded, merged
+
+    upgraded, upgraded_settings = inner_upgrade(defaults, currents)
+    return upgraded, AttrConfig(upgraded_settings)
 
 
 ############################################################
