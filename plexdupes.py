@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import time
+from fnmatch import fnmatch
 
 from config import cfg
 
@@ -55,18 +56,24 @@ def get_score(media_info):
             score += int(codec_score)
             log.debug("Added %d to score for audio_codec being %r", int(codec_score), str(codec))
             break
+    # score filename
+    for filename_keyword, keyword_score in cfg.FILENAME_SCORES.items():
+        for filename in media_info['file']:
+            if fnmatch(filename.decode().lower(), filename_keyword.lower()):
+                score += int(keyword_score)
+                log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
     # add bitrate to score
-    score += int(media_info['video_bitrate'])
-    log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']))
+    score += int(media_info['video_bitrate']) * 2
+    log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
     # add duration to score
     score += int(media_info['video_duration']) / 1000
     log.debug("Added %d to score for video duration", int(media_info['video_duration']) / 1000)
     # add width to score
-    score += int(media_info['video_width'])
-    log.debug("Added %d to score for video width", int(media_info['video_width']))
+    score += int(media_info['video_width']) * 2
+    log.debug("Added %d to score for video width", int(media_info['video_width']) * 2)
     # add height to score
-    score += int(media_info['video_height'])
-    log.debug("Added %d to score for video height", int(media_info['video_height']))
+    score += int(media_info['video_height']) * 2
+    log.debug("Added %d to score for video height", int(media_info['video_height']) * 2)
     # add audio channels to score
     score += int(media_info['audio_channels']) * 1000
     log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
