@@ -3,7 +3,6 @@ import logging
 import os
 import sys
 import time
-from enum import Enum
 
 from config import cfg
 
@@ -14,12 +13,6 @@ except ImportError:
 
 from plexapi.server import PlexServer
 import requests
-
-
-class SectionType(Enum):
-    MOVIE = 1
-    TV = 2
-
 
 ############################################################
 # INIT
@@ -50,9 +43,8 @@ except:
 ############################################################
 
 def get_dupes(plex_section_name, plex_section_type):
-    sec_type = 'episode' if plex_section_type == SectionType.TV else 'movie'
-    return plex.library.section(plex_section_name).search(duplicate=True,
-                                                          libtype=sec_type)
+    sec_type = 'episode' if plex_section_type == 2 else 'movie'
+    return plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
 
 
 def get_score(media_info):
