@@ -79,8 +79,8 @@ def get_score(media_info):
     log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
     # add file size to score
     if cfg.SCORE_FILESIZE:
-        score += int(media_info['file_size']) / 10000
-        log.debug("Added %d to score for total file size", int(media_info['file_size']) / 10000)
+        score += int(media_info['file_size']) / 100000
+        log.debug("Added %d to score for total file size", int(media_info['file_size']) / 100000)
     return int(score)
 
 
