@@ -1,4 +1,5 @@
 #!/usr/bin/env python3.5
+import collections
 import logging
 import os
 import sys
@@ -51,10 +52,22 @@ def get_dupes(plex_section_name, plex_section_type):
 def get_score(media_info):
     score = 0
     # score audio codec
-    for codec, codec_score in cfg.CODEC_SCORES.items():
+    for codec, codec_score in cfg.AUDIO_CODEC_SCORES.items():
         if codec.lower() == media_info['audio_codec'].lower():
             score += int(codec_score)
             log.debug("Added %d to score for audio_codec being %r", int(codec_score), str(codec))
+            break
+    # score video codec
+    for codec, codec_score in cfg.VIDEO_CODEC_SCORES.items():
+        if codec.lower() == media_info['video_codec'].lower():
+            score += int(codec_score)
+            log.debug("Added %d to score for video_codec being %r", int(codec_score), str(codec))
+            break
+    # score video resolution
+    for resolution, resolution_score in cfg.VIDEO_RESOLUTION_SCORES.items():
+        if resolution.lower() == media_info['video_resolution'].lower():
+            score += int(resolution_score)
+            log.debug("Added %d to score for video_resolution being %r", int(resolution_score), str(resolution))
             break
     # score filename
     for filename_keyword, keyword_score in cfg.FILENAME_SCORES.items():
@@ -66,8 +79,8 @@ def get_score(media_info):
     score += int(media_info['video_bitrate']) * 2
     log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
     # add duration to score
-    score += int(media_info['video_duration']) / 1000
-    log.debug("Added %d to score for video duration", int(media_info['video_duration']) / 1000)
+    score += int(media_info['video_duration']) / 300
+    log.debug("Added %d to score for video duration", int(media_info['video_duration']) / 300)
     # add width to score
     score += int(media_info['video_width']) * 2
     log.debug("Added %d to score for video width", int(media_info['video_width']) * 2)
@@ -241,7 +254,9 @@ if __name__ == "__main__":
         if not cfg.AUTO_DELETE:
             # manual delete
             print("Which media item do you wish to keep for %r" % item)
-            for media_id, part_info in parts.items():
+
+            for media_id, part_info in collections.OrderedDict(
+                    sorted(parts.items(), key=lambda x: x[1]['score'], reverse=True)).items():
                 print("\tID: %r - Score: %r - INFO: %r" % (media_id, part_info['score'], part_info))
             keep_id = int(input("Enter ID of item to keep (0 = skip): "))
             if keep_id and keep_id in parts:
