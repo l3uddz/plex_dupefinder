@@ -269,7 +269,7 @@ if __name__ == "__main__":
                 print("\t%d) ID: %r - Score: %r - INFO: %r" % (pos, media_id, part_info['score'], part_info))
 
             keep_item = input("Choose item to keep (0 = skip | b = best): ")
-            if keep_item.lower() == 'b' or (int(keep_item) > 0 and int(keep_item) <= len(media_items)):
+            if keep_item.lower() == 'b' or 0 < int(keep_item) <= len(media_items):
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if keep_item.lower() == 'b' and best_item is not None and best_item == part_info:
