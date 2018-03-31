@@ -255,14 +255,27 @@ if __name__ == "__main__":
             # manual delete
             print("Which media item do you wish to keep for %r" % item)
 
+            media_items = {}
+            best_item = None
+            pos = 0
             for media_id, part_info in collections.OrderedDict(
                     sorted(parts.items(), key=lambda x: x[1]['score'], reverse=True)).items():
-                print("\tID: %r - Score: %r - INFO: %r" % (media_id, part_info['score'], part_info))
-            keep_id = int(input("Enter ID of item to keep (0 = skip): "))
-            if keep_id and keep_id in parts:
+
+                pos += 1
+                if pos == 1:
+                    best_item = part_info
+                media_items[pos] = media_id
+
+                print("\t%d) ID: %r - Score: %r - INFO: %r" % (pos, media_id, part_info['score'], part_info))
+
+            keep_item = input("Choose item to keep (0 = skip | b = best): ")
+            if keep_item.lower() == 'b' or (int(keep_item) > 0 and int(keep_item) <= len(media_items)):
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
-                    if media_id == keep_id:
+                    if keep_item.lower() == 'b' and best_item is not None and best_item == part_info:
+                        print("\tKeeping %r" % media_id)
+                        write_decision(keeping=part_info)
+                    elif keep_item.lower() != 'b' and len(media_items) and media_id == media_items[int(keep_item)]:
                         print("\tKeeping %r" % media_id)
                         write_decision(keeping=part_info)
                     else:
