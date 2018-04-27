@@ -74,7 +74,7 @@ def get_score(media_info):
     # score filename
     for filename_keyword, keyword_score in cfg.FILENAME_SCORES.items():
         for filename in media_info['file']:
-            if fnmatch(os.path.basename(filename.decode().lower()), filename_keyword.lower()):
+            if fnmatch(os.path.basename(filename.lower()), filename_keyword.lower()):
                 score += int(keyword_score)
                 log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
     # add bitrate to score
