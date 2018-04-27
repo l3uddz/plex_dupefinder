@@ -6,6 +6,8 @@ import sys
 import time
 from fnmatch import fnmatch
 
+from tabulate import tabulate
+
 from config import cfg
 
 try:
@@ -170,7 +172,7 @@ def get_media_info(item):
     if len(item.parts) > 1:
         info['multipart'] = True
     for part in item.parts:
-        info['file'].append(part.file.encode('utf-8'))
+        info['file'].append(part.file)
         info['file_size'] += part.size
 
     return info
@@ -214,11 +216,110 @@ def should_skip(files):
     return False
 
 
+def millis_to_string(millis):
+    """ reference: https://stackoverflow.com/a/35990338 """
+    try:
+        seconds = (millis / 1000) % 60
+        seconds = int(seconds)
+        minutes = (millis / (1000 * 60)) % 60
+        minutes = int(minutes)
+        hours = (millis / (1000 * 60 * 60)) % 24
+        return "%02d:%02d:%02d" % (hours, minutes, seconds)
+    except Exception:
+        log.exception("Exception occurred converting %d millis to readable string: ", millis)
+    return "%d milliseconds" % millis
+
+
+def bytes_to_string(size_bytes):
+    """
+    reference: https://stackoverflow.com/a/6547474
+    """
+    try:
+        if size_bytes == 1:
+            # because I really hate unnecessary plurals
+            return "1 byte"
+
+        suffixes_table = [('bytes', 0), ('KB', 0), ('MB', 1), ('GB', 2), ('TB', 2), ('PB', 2)]
+
+        num = float(size_bytes)
+        for suffix, precision in suffixes_table:
+            if num < 1024.0:
+                break
+            num /= 1024.0
+
+        if precision == 0:
+            formatted_size = "%d" % num
+        else:
+            formatted_size = str(round(num, ndigits=precision))
+
+        return "%s %s" % (formatted_size, suffix)
+    except Exception:
+        log.exception("Exception occurred converting %d bytes to readable string: ", size_bytes)
+    return "%d bytes" % size_bytes
+
+
+def kbps_to_string(size_kbps):
+    try:
+        if size_kbps < 1024:
+            return "%d Kbps" % size_kbps
+        else:
+            return "{:.2f} Mbps".format(size_kbps / 1024.)
+    except Exception:
+        log.exception("Exception occurred converting %d Kbps to readable string: ", size_kbps)
+    return "%d Bbps" % size_kbps
+
+
+def build_tabulated(parts, items):
+    headers = ['choice', 'score', 'id', 'file', 'size', 'duration', 'bitrate', 'resolution',
+               'codecs']
+    part_data = []
+
+    for choice, item_id in items.items():
+        # add to part_data
+        tmp = []
+        for k in headers:
+            if 'choice' in k:
+                tmp.append(choice)
+            elif 'score' in k:
+                tmp.append(format(parts[item_id][k], ',d'))
+            elif 'size' in k:
+                tmp.append(bytes_to_string(parts[item_id]['file_size']))
+            elif 'duration' in k:
+                tmp.append(millis_to_string(parts[item_id]['video_duration']))
+            elif 'bitrate' in k:
+                tmp.append(kbps_to_string(parts[item_id]['video_bitrate']))
+            elif 'resolution' in k:
+                tmp.append("%s (%d x %d)" % (parts[item_id]['video_resolution'], parts[item_id]['video_width'],
+                                             parts[item_id]['video_height']))
+            elif 'codecs' in k:
+                tmp.append("%s, %s x %d" % (parts[item_id]['video_codec'], parts[item_id]['audio_codec'],
+                                            parts[item_id]['audio_channels']))
+            else:
+                tmp.append(parts[item_id][k])
+        part_data.append(tmp)
+    return headers, part_data
+
+
 ############################################################
 # MAIN
 ############################################################
 
 if __name__ == "__main__":
+    print("""
+       _                 _                   __ _           _
+ _ __ | | _____  __   __| |_   _ _ __   ___ / _(_)_ __   __| | ___ _ __
+| '_ \| |/ _ \ \/ /  / _` | | | | '_ \ / _ \ |_| | '_ \ / _` |/ _ \ '__|
+| |_) | |  __/>  <  | (_| | |_| | |_) |  __/  _| | | | | (_| |  __/ |
+| .__/|_|\___/_/\_\  \__,_|\__,_| .__/ \___|_| |_|_| |_|\__,_|\___|_|
+|_|                             |_|
+
+#########################################################################
+# Author:   l3uddz                                                      #
+# URL:      https://github.com/l3uddz/plex_dupefinder                   #
+# --                                                                    #
+# Part of the Cloudbox project: https://cloudbox.rocks                  #
+#########################################################################
+""")
     print("Initialized")
     process_later = {}
     # process sections
@@ -232,7 +333,7 @@ if __name__ == "__main__":
                 title = ("%s - %02dx%02d - %s" % (
                     item.grandparentTitle, int(item.parentIndex), int(item.index), item.title)).encode('utf-8')
             elif item.type == 'movie':
-                title = item.title.encode('utf-8')
+                title = item.title
             else:
                 title = 'Unknown'
 
@@ -252,23 +353,25 @@ if __name__ == "__main__":
     time.sleep(5)
     for item, parts in process_later.items():
         if not cfg.AUTO_DELETE:
+            partz = {}
             # manual delete
-            print("Which media item do you wish to keep for %r" % item)
+            print("\nWhich media item do you wish to keep for %r" % item)
 
             media_items = {}
             best_item = None
             pos = 0
             for media_id, part_info in collections.OrderedDict(
                     sorted(parts.items(), key=lambda x: x[1]['score'], reverse=True)).items():
-
                 pos += 1
                 if pos == 1:
                     best_item = part_info
                 media_items[pos] = media_id
+                partz[media_id] = part_info
 
-                print("\t%d) ID: %r - Score: %r - INFO: %r" % (pos, media_id, part_info['score'], part_info))
+            headers, data = build_tabulated(partz, media_items)
+            print(tabulate(data, headers=headers))
 
-            keep_item = input("Choose item to keep (0 = skip | b = best): ")
+            keep_item = input("\nChoose item to keep (0 = skip | b = best): ")
             if keep_item.lower() == 'b' or 0 < int(keep_item) <= len(media_items):
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
@@ -287,7 +390,7 @@ if __name__ == "__main__":
                 print("Unexpected response, skipping deletion(s) for %r" % item)
         else:
             # auto delete
-            print("Determining best media item to keep for %r" % item)
+            print("\nDetermining best media item to keep for %r" % item)
             keep_score = 0
             keep_id = None
             for media_id, part_info in parts.items():
