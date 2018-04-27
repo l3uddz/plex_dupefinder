@@ -319,6 +319,8 @@ if __name__ == "__main__":
 # --                                                                    #
 # Part of the Cloudbox project: https://cloudbox.rocks                  #
 #########################################################################
+# GNU General Public License v3.0                                       #
+#########################################################################
 """)
     print("Initialized")
     process_later = {}
