@@ -355,7 +355,7 @@ if __name__ == "__main__":
         if not cfg.AUTO_DELETE:
             partz = {}
             # manual delete
-            print("\nWhich media item do you wish to keep for %r\n" % item)
+            print("\nWhich media item do you wish to keep for %r ?\n" % item)
 
             media_items = {}
             best_item = None
