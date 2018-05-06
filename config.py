@@ -40,11 +40,45 @@ class AttrConfig(AttrDict):
         return None
 
 
+def prefilled_default_config():
+    default_config = base_config.copy()
+
+    # sections
+    default_config['PLEX_SECTIONS'] = {
+        'Movies': 1,
+        'TV': 2
+    }
+
+    # filename scores
+    default_config['FILENAME_SCORES'] = {
+        '*Remux*': 20000,
+        '*1080p*BluRay*': 15000,
+        '*720p*BluRay*': 10000,
+        '*WEB*NTB*': 5000,
+        '*WEB*VISUM*': 5000,
+        '*WEB*KINGS*': 5000,
+        '*WEB*CasStudio*': 5000,
+        '*WEB*SiGMA*': 5000,
+        '*WEB*QOQ*': 5000,
+        '*WEB*TROLLHD*': 2500,
+        '*REPACK*': 1500,
+        '*PROPER*': 1500,
+        '*WEB*TBS*': -1000,
+        '*HDTV*': -1000,
+        '*dvd*': -1000,
+        '*.avi': -1000,
+        '*.ts': -1000,
+        '*.vob': -5000
+    }
+
+    return default_config
+
+
 def build_config():
     if not os.path.exists(config_path):
         print("Dumping default config to: %s" % config_path)
         with open(config_path, 'w') as fp:
-            json.dump(base_config, fp, sort_keys=True, indent=2)
+            json.dump(prefilled_default_config(), fp, sort_keys=True, indent=2)
         return True
     else:
         return False
