@@ -182,7 +182,7 @@ def get_media_info(item):
         info['multipart'] = True
     for part in item.parts:
         info['file'].append(part.file)
-        info['file_size'] += part.size
+        info['file_size'] += part.size if part.size else 0
 
     return info
 
