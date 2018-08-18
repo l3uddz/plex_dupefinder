@@ -35,5 +35,3 @@ dist/
 *.manifest
 *.spec
 
-#cPanel Deployment File
-.cpanel.yml

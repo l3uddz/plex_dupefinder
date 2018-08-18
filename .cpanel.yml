@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/acptester/public_html/
+    - /bin/cp config.py $DEPLOYPATH
+    - /bin/cp plexdupes.py $DEPLOYPATH
