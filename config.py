@@ -1,8 +1,13 @@
+#!/usr/bin/env python3
+
+
 import json
 import os
 import sys
 
 from attrdict import AttrDict
+from plexapi.myplex import MyPlexAccount
+from getpass import getpass
 
 config_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'config.json')
 base_config = {
@@ -40,8 +45,15 @@ class AttrConfig(AttrDict):
         return None
 
 
-def prefilled_default_config():
+def prefilled_default_config(configs):
     default_config = base_config.copy()
+
+    # Set the token and server url
+    default_config['PLEX_SERVER'] = configs['url']
+    default_config['PLEX_TOKEN'] = configs['token']
+
+    # Set AUTO_DELETE config option
+    default_config['AUTO_DELETE'] = configs['auto_delete']
 
     # sections
     default_config['PLEX_SECTIONS'] = {
@@ -77,9 +89,33 @@ def prefilled_default_config():
 def build_config():
     if not os.path.exists(config_path):
         print("Dumping default config to: %s" % config_path)
+
+        configs = dict(url='', token='', auto_delete=False)
+
+        # Get URL
+        configs['url'] = input("Plex Server URL: ")
+
+        # Get Credentials for plex.tv
+        user = input("Plex Username: ")
+        password = getpass('Plex Password: ')
+
+        # Get choice for Auto Deletion
+        auto_del = input("Auto Delete duplicates? [y/n]: ")
+        while auto_del.strip().lower() not in ['y', 'n']:
+            auto_del = input("Auto Delete duplicates? [y/n]: ")
+            if auto_del.strip().lower() == 'y':
+                configs['auto_delete'] = True
+            elif auto_del.strip().lower() == 'n':
+                configs['auto_delete'] = False
+
+        account = MyPlexAccount(user, password)
+        configs['token'] = account.authenticationToken
+
         with open(config_path, 'w') as fp:
-            json.dump(prefilled_default_config(), fp, sort_keys=True, indent=2)
+            json.dump(prefilled_default_config(configs), fp, sort_keys=True, indent=2)
+
         return True
+
     else:
         return False
 
