@@ -77,6 +77,12 @@ def get_score(media_info):
             if fnmatch(os.path.basename(filename.lower()), filename_keyword.lower()):
                 score += int(keyword_score)
                 log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
+    # score filepath
+    for filepath_start, filepath_score in cfg.FILEPATH_SCORES.items():
+        for filepath in media_info['file']:
+            if filepath.lower().startswith(filepath_start.lower()):
+                score += int(filepath_score)
+                log.debug("Added %d to score for match filepath_start %s", int(filepath_score), filepath_start)
     # add bitrate to score
     score += int(media_info['video_bitrate']) * 2
     log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)

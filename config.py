@@ -16,6 +16,7 @@ base_config = {
                            'msmpeg4v2': 100, 'msmpeg4v3': 100},
     'VIDEO_RESOLUTION_SCORES': {'Unknown': 0, '4k': 20000, '1080': 10000, '720': 5000, '480': 3000, 'sd': 1000},
     'FILENAME_SCORES': {},
+    'FILEPATH_SCORES': {},
     'SKIP_LIST': [],
     'SCORE_FILESIZE': True,
     'AUTO_DELETE': False
