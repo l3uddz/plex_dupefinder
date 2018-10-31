@@ -339,7 +339,8 @@ if __name__ == "__main__":
         for item in dupes:
             if item.type == 'episode':
                 title = "%s - %02dx%02d - %s" % (
-                    item.grandparentTitle, int(item.parentIndex), int(item.index), item.title)
+                    item.grandparentTitle, int(item.parentIndex) if item.parentIndex else 0,
+                    int(item.index) if item.index else 0, item.title)
             elif item.type == 'movie':
                 title = item.title
             else:
