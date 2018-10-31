@@ -338,9 +338,19 @@ if __name__ == "__main__":
         # loop returned duplicates
         for item in dupes:
             if item.type == 'episode':
-                title = "%s - %02dx%02d - %s" % (
-                    item.grandparentTitle, int(item.parentIndex) if item.parentIndex else 0,
-                    int(item.index) if item.index else 0, item.title)
+                show_name = 'Unknown'
+                episode_name = 'Unknown'
+                season_number = 0
+                episode_number = 0
+                try:
+                    show_name = item.grandparentTitle
+                    episode_name = item.title
+                    season_number = int(item.parentIndex)
+                    episode_number = int(item.index)
+                except Exception:
+                    pass
+
+                title = "%s - %02dx%02d - %s" % (show_name, season_number, episode_number, episode_name)
             elif item.type == 'movie':
                 title = item.title
             else:
