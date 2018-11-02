@@ -402,6 +402,9 @@ if __name__ == "__main__":
                         write_decision(keeping=part_info)
                     else:
                         print("\tRemoving %r" % media_id)
+                        if should_skip(part_info['file']):
+                            print("\tSkipping removal of this item as there is a match in SKIP_LIST")
+                            continue
                         delete_item(part_info['show_key'], media_id)
                         write_decision(removed=part_info)
                         time.sleep(2)
