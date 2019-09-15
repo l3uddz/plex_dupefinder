@@ -48,7 +48,16 @@ except:
 
 def get_dupes(plex_section_name, plex_section_type):
     sec_type = 'episode' if plex_section_type == 2 else 'movie'
-    return plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
+    dupes = plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
+    dupes_new = dupes.copy()
+
+    # filter out duplicates that do not have exact file path/name
+    if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+        for dupe in dupes:
+            if not all(x == dupe.locations[0] for x in dupe.locations):
+                dupes_new.remove(dupe)
+
+    return dupes_new
 
 
 def get_score(media_info):
@@ -272,6 +281,9 @@ def kbps_to_string(size_kbps):
 def build_tabulated(parts, items):
     headers = ['choice', 'score', 'id', 'file', 'size', 'duration', 'bitrate', 'resolution',
                'codecs']
+    if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+        headers.remove('score')
+
     part_data = []
 
     for choice, item_id in items.items():
@@ -282,6 +294,10 @@ def build_tabulated(parts, items):
                 tmp.append(choice)
             elif 'score' in k:
                 tmp.append(format(parts[item_id][k], ',d'))
+            elif 'id' in k:
+                tmp.append(parts[item_id][k])
+            elif 'file' in k:
+                tmp.append(parts[item_id][k])
             elif 'size' in k:
                 tmp.append(bytes_to_string(parts[item_id]['file_size']))
             elif 'duration' in k:
@@ -294,8 +310,6 @@ def build_tabulated(parts, items):
             elif 'codecs' in k:
                 tmp.append("%s, %s x %d" % (parts[item_id]['video_codec'], parts[item_id]['audio_codec'],
                                             parts[item_id]['audio_channels']))
-            else:
-                tmp.append(parts[item_id][k])
         part_data.append(tmp)
     return headers, part_data
 
@@ -344,9 +358,10 @@ if __name__ == "__main__":
             parts = {}
             for part in item.media:
                 part_info = get_media_info(part)
-                part_info['score'] = get_score(part_info)
+                if not cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+                    part_info['score'] = get_score(part_info)
                 part_info['show_key'] = item.key
-                log.info("ID: %r - Score: %d - Meta:\n%r", part.id, part_info['score'],
+                log.info("ID: %r - Score: %s - Meta:\n%r", part.id, part_info.get('score', 'N/A'),
                          part_info)
                 parts[part.id] = part_info
             process_later[title] = parts
@@ -359,11 +374,22 @@ if __name__ == "__main__":
             # manual delete
             print("\nWhich media item do you wish to keep for %r ?\n" % item)
 
+            sort_key = None
+            sort_order = None
+
+            if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+                sort_key = "id"
+                sort_order_reverse = False
+            else:
+                sort_key = "score"
+                sort_order_reverse = True
+
             media_items = {}
             best_item = None
             pos = 0
+
             for media_id, part_info in collections.OrderedDict(
-                    sorted(parts.items(), key=lambda x: x[1]['score'], reverse=True)).items():
+                    sorted(parts.items(), key=lambda x: x[1][sort_key], reverse=sort_order_reverse)).items():
                 pos += 1
                 if pos == 1:
                     best_item = part_info
@@ -395,10 +421,23 @@ if __name__ == "__main__":
             print("\nDetermining best media item to keep for %r" % item)
             keep_score = 0
             keep_id = None
-            for media_id, part_info in parts.items():
-                if int(part_info['score']) > keep_score:
-                    keep_score = part_info['score']
-                    keep_id = media_id
+
+            if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+                # select lowest id to keep
+                for media_id, part_info in parts.items():
+                    if keep_score == 0 and keep_id is None:
+                        keep_score = int(part_info['id'])
+                        keep_id = media_id
+                    elif int(part_info['id']) < keep_score:
+                        keep_score = part_info['id']
+                        keep_id = media_id
+            else:
+                # select highest score to keep
+                for media_id, part_info in parts.items():
+                    if int(part_info['score']) > keep_score:
+                        keep_score = part_info['score']
+                        keep_id = media_id
+
             if keep_id:
                 # delete other items
                 write_decision(title=item)
