@@ -18,7 +18,8 @@ base_config = {
     'FILENAME_SCORES': {},
     'SKIP_LIST': [],
     'SCORE_FILESIZE': True,
-    'AUTO_DELETE': False
+    'AUTO_DELETE': False,
+    'FIND_DUPLICATE_FILEPATHS_ONLY': False
 }
 cfg = None
 
