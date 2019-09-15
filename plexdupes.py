@@ -191,9 +191,9 @@ def delete_item(show_key, media_id):
     delete_url = urljoin(cfg.PLEX_SERVER, '%s/media/%d' % (show_key, media_id))
     log.debug("Sending DELETE request to %r" % delete_url)
     if requests.delete(delete_url, headers={'X-Plex-Token': cfg.PLEX_TOKEN}).status_code == 200:
-        print("\t\tDeleted media item %r!" % media_id)
+        print("\t\tDeleted media item: %r" % media_id)
     else:
-        print("\t\tError deleting media item %r..." % media_id)
+        print("\t\tError deleting media item: %r" % media_id)
 
 
 ############################################################
@@ -206,11 +206,11 @@ decision_filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])),
 def write_decision(title=None, keeping=None, removed=None):
     lines = []
     if title:
-        lines.append('\nTitle: %s\n' % title)
+        lines.append('\nTitle    : %s\n' % title)
     if keeping:
-        lines.append('\tKeeping: %r\n' % keeping)
+        lines.append('\tKeeping  : %r\n' % keeping)
     if removed:
-        lines.append('\tRemoving: %r\n' % removed)
+        lines.append('\tRemoving : %r\n' % removed)
 
     with open(decision_filename, 'a') as fp:
         fp.writelines(lines)
@@ -404,13 +404,13 @@ if __name__ == "__main__":
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if keep_item.lower() == 'b' and best_item is not None and best_item == part_info:
-                        print("\tKeeping %r" % media_id)
+                        print("\tKeeping  : %r" % media_id)
                         write_decision(keeping=part_info)
                     elif keep_item.lower() != 'b' and len(media_items) and media_id == media_items[int(keep_item)]:
-                        print("\tKeeping %r" % media_id)
+                        print("\tKeeping  : %r" % media_id)
                         write_decision(keeping=part_info)
                     else:
-                        print("\tRemoving %r" % media_id)
+                        print("\tRemoving : %r" % media_id)
                         delete_item(part_info['show_key'], media_id)
                         write_decision(removed=part_info)
                         time.sleep(2)
@@ -418,7 +418,7 @@ if __name__ == "__main__":
                 print("Unexpected response, skipping deletion(s) for %r" % item)
         else:
             # auto delete
-            print("\nDetermining best media item to keep for %r" % item)
+            print("\nDetermining best media item to keep for %r ..." % item)
             keep_score = 0
             keep_id = None
 
@@ -443,10 +443,10 @@ if __name__ == "__main__":
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if media_id == keep_id:
-                        print("\tKeeping %r: %r" % (media_id, part_info['file']))
+                        print("\tKeeping  : %r - %r" % (media_id, part_info['file']))
                         write_decision(keeping=part_info)
                     else:
-                        print("\tRemoving %r: %r" % (media_id, part_info['file']))
+                        print("\tRemoving : %r - %r" % (media_id, part_info['file']))
                         if should_skip(part_info['file']):
                             print("\tSkipping removal of this item as there is a match in SKIP_LIST")
                             continue
