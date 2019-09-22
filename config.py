@@ -8,7 +8,7 @@ config_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'conf
 base_config = {
     'PLEX_SERVER': 'https://plex.your-server.com',
     'PLEX_TOKEN': '',
-    'PLEX_SECTIONS': {},
+    'PLEX_LIBRARIES': {},
     'AUDIO_CODEC_SCORES': {'Unknown': 0, 'wmapro': 200, 'mp2': 500, 'mp3': 1000, 'ac3': 1000, 'dca': 2000, 'pcm': 2500,
                            'flac': 2500, 'dca-ma': 4000, 'truehd': 4500, 'aac': 1000, 'eac3': 1250},
     'VIDEO_CODEC_SCORES': {'Unknown': 0, 'h264': 10000, 'h265': 5000, 'hevc': 5000, 'mpeg4': 500, 'vc1': 3000,
@@ -45,7 +45,7 @@ def prefilled_default_config():
     default_config = base_config.copy()
 
     # sections
-    default_config['PLEX_SECTIONS'] = {
+    default_config['PLEX_LIBRARIES'] = {
         'Movies': 1,
         'TV': 2
     }
