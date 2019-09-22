@@ -220,7 +220,7 @@ def write_decision(title=None, keeping=None, removed=None):
 def should_skip(files):
     for files_item in files:
         for skip_item in cfg.SKIP_LIST:
-            if skip_item.lower() in str(files_item).lower():
+            if skip_item in str(files_item):
                 return True
     return False
 
