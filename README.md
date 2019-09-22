@@ -100,6 +100,17 @@ _Note: Steps below are for Debian-based distros (other operating systems will re
    plex_dupefinder
    ```
 
+1. Fill in Plex URL and credentials at the prompt to generated a Plex Access Token (optional).
+
+   ```
+   Dumping default config to: /opt/plex_dupefinder/config.json
+   Plex Server URL: http://localhost:32400
+   Plex Username: your_plex_username
+   Plex Password: your_plex_password
+   Auto Delete duplicates? [y/n]: n
+   Please edit the default configuration before running again!
+   ```
+
 1. Configure the `config.json` file.
 
    ```
@@ -292,7 +303,7 @@ The scoring is based on: non-configurable and configurable parameters.
 
 1. Obtain a Plex Access Token:
 
-   - Run the Plex Token script by [Werner Beroux](https://github.com/wernight): `/opt/plex_dupefinder/scripts/plex_token.sh`.
+   - Fill in the Plex URL and Plex login credentials, at the prompt, on first run. This only occurs when there is no `config.json` present.
 
      or
 
