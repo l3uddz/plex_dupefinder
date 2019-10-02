@@ -43,7 +43,7 @@ Click to enlarge.
 
 # Requirements
 
-1. Python 3.5+.
+1. Python 3.6+.
 
 1. Required Python modules (see below).
 
