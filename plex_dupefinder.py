@@ -399,8 +399,8 @@ if __name__ == "__main__":
             headers, data = build_tabulated(partz, media_items)
             print(tabulate(data, headers=headers))
 
-            keep_item = input("\nChoose item to keep (0 = skip | b = best): ")
-            if keep_item.lower() == 'b' or 0 < int(keep_item) <= len(media_items):
+            keep_item = input("\nChoose item to keep (0 or s = skip | 1 or b = best): ")
+            if (keep_item.lower() != 's') and (keep_item.lower() == 'b' or 0 < int(keep_item) <= len(media_items)):
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if keep_item.lower() == 'b' and best_item is not None and best_item == part_info:
@@ -414,6 +414,8 @@ if __name__ == "__main__":
                         delete_item(part_info['show_key'], media_id)
                         write_decision(removed=part_info)
                         time.sleep(2)
+            elif keep_item.lower() == 's' or int(keep_item) == 0:
+                print("Skipping deletion(s) for %r" % item)
             else:
                 print("Unexpected response, skipping deletion(s) for %r" % item)
         else:
