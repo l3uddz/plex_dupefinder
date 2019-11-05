@@ -35,10 +35,10 @@
     "*WEB*VISUM*": 5000,
     "*dvd*": -1000
   },
-  "PLEX_LIBRARIES": {
-    "Movies": 1,
-    "TV": 2
-  },
+  "PLEX_LIBRARIES": [
+    "Movies",
+    "TV"
+  ],
   "PLEX_SERVER": "https://plex.your-server.com",
   "PLEX_TOKEN": "",
   "SCORE_FILESIZE": true,

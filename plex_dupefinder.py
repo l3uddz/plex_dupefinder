@@ -46,18 +46,28 @@ except:
 # PLEX METHODS
 ############################################################
 
-def get_dupes(plex_section_name, plex_section_type):
-    sec_type = 'episode' if plex_section_type == 2 else 'movie'
-    dupes = plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
-    dupes_new = dupes.copy()
+
+def get_dupes(plex_section_name):
+    sec_type = get_section_type(plex_section_name)
+    dupe_search_results = plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
+    dupe_search_results_new = dupe_search_results.copy()
 
     # filter out duplicates that do not have exact file path/name
     if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
-        for dupe in dupes:
+        for dupe in dupe_search_results:
             if not all(x == dupe.locations[0] for x in dupe.locations):
-                dupes_new.remove(dupe)
+                dupe_search_results_new.remove(dupe)
 
-    return dupes_new
+    return dupe_search_results_new
+
+
+def get_section_type(plex_section_name):
+    try:
+        plex_section_type = plex.library.section(plex_section_name).type
+    except Exception:
+        log.exception("Exception occurred while trying to lookup the section type for Library: %s", plex_section_name)
+        exit(1)
+    return 'episode' if plex_section_type == 'show' else 'movie'
 
 
 def get_score(media_info):
@@ -340,8 +350,8 @@ if __name__ == "__main__":
     process_later = {}
     # process sections
     print("Finding dupes...")
-    for section, section_type in cfg.PLEX_LIBRARIES.items():
-        dupes = get_dupes(section, section_type)
+    for section in cfg.PLEX_LIBRARIES:
+        dupes = get_dupes(section)
         print("Found %d dupes for section %r" % (len(dupes), section))
         # loop returned duplicates
         for item in dupes:

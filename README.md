@@ -160,10 +160,10 @@ _Note: Steps below are for Debian-based distros (other operating systems will re
     "*WEB*VISUM*": 5000,
     "*dvd*": -1000
   },
-  "PLEX_LIBRARIES": {
-    "Movies": 1,
-    "TV": 2
-  },
+  "PLEX_LIBRARIES": [
+    "Movies",
+    "TV"
+  ],
   "PLEX_SERVER": "https://plex.your-server.com",
   "PLEX_TOKEN": "",
   "SCORE_FILESIZE": true,
@@ -257,40 +257,29 @@ The scoring is based on: non-configurable and configurable parameters.
 
      ![](https://i.imgur.com/JFRTD1m.png)
 
-1. Under `PLEX_LIBRARIES`, type in the Plex *Library Name* (exactly) and specify the *Library Type*: `1` for movies or `2` for TV shows.
-
-   _Note: 'Library Type' is not the same as the 'Section ID' of a library._
+1. Under `PLEX_LIBRARIES`, list your Plex Libraries exactly as they are named in your Plex.
 
    - Format:
 
+     ```json
+     "PLEX_LIBRARIES": [
+       "LIBRARY_NAME_1",
+       "LIBRARY_NAME_2"
+     ],
      ```
-     "PLEX_LIBRARIES": {
-       "LIBRARY_NAME_1": #,
-       "LIBRARY_NAME_2": #
-     },
-     ```
-     \# = Library Type: `1` or `2`
-
-   - For basic libraries, this will look like:
+     or
 
      ```json
-     "PLEX_LIBRARIES": {
-       "Movies": 1,
-       "TV": 2
-     },
+     "PLEX_LIBRARIES": ["LIBRARY_NAME_1", "LIBRARY_NAME_2"],
      ```
-
-   - For more advanced libraries, it can look like this:
+     
+   - Example:
 
      ```json
-     "PLEX_LIBRARIES": {
-        "3D Movies": 1,
-        "4K Movies": 1,
-        "Foreign Movies": 1,
-        "Hollywood Movies": 1,
-        "Kids Movies": 1,
-        "TV": 2
-     },
+     "PLEX_LIBRARIES": [
+       "Movies",
+       "TV"
+     ],
      ```
 
 ### Plex Server URL

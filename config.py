@@ -57,10 +57,10 @@ def prefilled_default_config(configs):
     default_config['AUTO_DELETE'] = configs['auto_delete']
 
     # sections
-    default_config['PLEX_LIBRARIES'] = {
-        'Movies': 1,
-        'TV': 2
-    }
+    default_config['PLEX_LIBRARIES'] = [
+        'Movies',
+        'TV'
+    ]
 
     # filename scores
     default_config['FILENAME_SCORES'] = {
