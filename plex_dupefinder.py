@@ -48,26 +48,37 @@ except:
 
 
 def get_dupes(plex_section_name):
+
+    supported_section_types = ('episode', 'movie')
+
     sec_type = get_section_type(plex_section_name)
-    dupe_search_results = plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
-    dupe_search_results_new = dupe_search_results.copy()
 
-    # filter out duplicates that do not have exact file path/name
-    if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
-        for dupe in dupe_search_results:
-            if not all(x == dupe.locations[0] for x in dupe.locations):
-                dupe_search_results_new.remove(dupe)
+    if sec_type in supported_section_types:
+        dupe_search_results = plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
+        dupe_search_results_new = dupe_search_results.copy()
 
-    return dupe_search_results_new
+        # filter out duplicates that do not have exact file path/name
+        if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+            for dupe in dupe_search_results:
+                if not all(x == dupe.locations[0] for x in dupe.locations):
+                    dupe_search_results_new.remove(dupe)
+    else:
+        log.warning("Section '%s' of type '%s' is not supported" % (plex_section_name, sec_type))
+        print("Section '%s' of type '%s' is not supported" % (plex_section_name, sec_type))
+
+    return dupe_search_results_new if sec_type in supported_section_types else list()        
 
 
-def get_section_type(plex_section_name):
-    try:
+def get_section_type(plex_section_name):                                                         
+    try:                                                                                                      
         plex_section_type = plex.library.section(plex_section_name).type
-    except Exception:
+    except Exception:                                                             
         log.exception("Exception occurred while trying to lookup the section type for Library: %s", plex_section_name)
-        exit(1)
-    return 'episode' if plex_section_type == 'show' else 'movie'
+        exit(1)                                                                                                       
+                                                                                                                      
+    if plex_section_type == 'show': plex_section_type = 'episode'                 
+                                                                                                     
+    return plex_section_type
 
 
 def get_score(media_info):
