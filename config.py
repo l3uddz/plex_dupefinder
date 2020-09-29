@@ -9,7 +9,11 @@ from attrdict import AttrDict
 from plexapi.myplex import MyPlexAccount
 from getpass import getpass
 
-config_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'config.json')
+parser = argparse.ArgumentParser(description='plex_dupefinder')
+parser.add_argument('--config', dest='config', default=os.path.dirname(os.path.realpath(sys.argv[0]))+'/config.json', help='set custom config location')
+args = parser.parse_args()
+
+config_path = os.path.join(os.path.dirname(os.path.realpath(args.config)), os.path.split(args.config)[1])
 base_config = {
     'PLEX_SERVER': 'https://plex.your-server.com',
     'PLEX_TOKEN': '',
