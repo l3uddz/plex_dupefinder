@@ -335,6 +335,17 @@ The scoring is based on: non-configurable and configurable parameters.
 - The default settings should be sufficient for most.
 
 
+## Choise Config File (optional)
+
+- You can choice specific config file by --config argument.
+
+- Example:
+
+```plex_dupefinder --config=config2.json```
+
+- The default value is config.json
+
+
 # Plex
 
 You will need to make sure that **Allow media deletion** is enabled in Plex.
