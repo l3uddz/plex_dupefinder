@@ -303,7 +303,7 @@ def build_tabulated(parts, items):
             if 'choice' in k:
                 tmp.append(choice)
             elif 'score' in k:
-                tmp.append(format(parts[item_id][k], ',d'))
+                tmp.append(format(parts[item_id][k], 'd'))
             elif 'id' in k:
                 tmp.append(parts[item_id][k])
             elif 'file' in k:
