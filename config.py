@@ -24,6 +24,7 @@ base_config = {
     'SKIP_LIST': [],
     'SCORE_FILESIZE': True,
     'AUTO_DELETE': False,
+    'DELETE_OR_RECORD': 'DELETE',
     'FIND_DUPLICATE_FILEPATHS_ONLY': False
 }
 cfg = None
@@ -55,6 +56,9 @@ def prefilled_default_config(configs):
 
     # Set AUTO_DELETE config option
     default_config['AUTO_DELETE'] = configs['auto_delete']
+    
+    # Set DELETE_OR_RECORD config option
+    default_config['DELETE_OR_RECORD'] = configs['del_or_rec']
 
     # sections
     default_config['PLEX_LIBRARIES'] = [
@@ -91,7 +95,7 @@ def build_config():
     if not os.path.exists(config_path):
         print("Dumping default config to: %s" % config_path)
 
-        configs = dict(url='', token='', auto_delete=False)
+        configs = dict(url='', token='', auto_delete=False, del_or_rec='DELETE')
 
         # Get URL
         configs['url'] = input("Plex Server URL: ")
@@ -108,6 +112,15 @@ def build_config():
                 configs['auto_delete'] = True
             elif auto_del.strip().lower() == 'n':
                 configs['auto_delete'] = False
+
+        # Get choice for DELETE or RECORD
+        del_or_rec = input("DELETE or RECORD? [DELETE/RECORD]: ")
+        while del_or_rec.strip().lower() not in ['delete', 'record']:
+            del_or_rec = input("DELETE or RECORD? [DELETE/RECORD]: ")
+            if del_or_rec.strip().lower() == 'delete':
+                configs['DELETE_OR_RECORD'] = 'DELETE'
+            elif del_or_rec.strip().lower() == 'record':
+                configs['DELETE_OR_RECORD'] = 'RECORD'
 
         account = MyPlexAccount(user, password)
         configs['token'] = account.authenticationToken
