@@ -102,7 +102,7 @@ def build_config():
 
         # Get Credentials for plex.tv
         user = input("Plex Username: ")
-        password = getpass('Plex Password: ')
+        password = getpass('Plex Password (Using 2FA?  Append your 2FA code to your password to obtain your token): ')
 
         # Get choice for Auto Deletion
         auto_del = input("Auto Delete duplicates? [y/n]: ")
