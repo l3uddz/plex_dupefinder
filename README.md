@@ -100,13 +100,15 @@ _Note: Steps below are for Debian-based distros (other operating systems will re
    plex_dupefinder
    ```
 
-1. Fill in Plex URL and credentials at the prompt to generated a Plex Access Token (optional).
+1. Fill in Plex URL and credentials at the prompt to generated a Plex Access Token (optional).  
+
+    If you are using Two Factor Authentication then append your 2FA code to the end of your password.  For example, if you password was "Let9MeIn" and you had the 2FA code "444 321" on your Authenticator app you should enter "Let9MeIn444321" as your password.
 
    ```
    Dumping default config to: /opt/plex_dupefinder/config.json
    Plex Server URL: http://localhost:32400
    Plex Username: your_plex_username
-   Plex Password: your_plex_password
+   Plex Password (Using 2FA?  Append your 2FA code to your password to obtain your token): your_plex_password
    Auto Delete duplicates? [y/n]: n
    Please edit the default configuration before running again!
    ```
@@ -333,6 +335,17 @@ The scoring is based on: non-configurable and configurable parameters.
 - You can set `VIDEO_RESOLUTION_SCORES` to your preference.
 
 - The default settings should be sufficient for most.
+
+
+## Choise Config File (optional)
+
+- You can choice specific config file by --config argument.
+
+- Example:
+
+```plex_dupefinder --config=config2.json```
+
+- The default value is config.json
 
 
 # Plex
