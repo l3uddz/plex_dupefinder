@@ -46,3 +46,6 @@ dist/
 pyvenv.cfg
 .venv
 pip-selfcheck.json
+
+# Venv
+venv/
