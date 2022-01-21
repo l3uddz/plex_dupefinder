@@ -211,7 +211,7 @@ def delete_item(show_key, media_id):
 ############################################################
 
 decision_filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'decisions.log')
-
+files_to_remove_filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'files_to_remove.log')
 
 def write_decision(title=None, keeping=None, removed=None):
     lines = []
@@ -224,6 +224,12 @@ def write_decision(title=None, keeping=None, removed=None):
 
     with open(decision_filename, 'a') as fp:
         fp.writelines(lines)
+    return
+
+
+def log_files_to_remove(file):
+    with open(files_to_remove_filename, 'a') as fp:
+        fp.writelines(file + '\n')
     return
 
 
@@ -411,18 +417,26 @@ if __name__ == "__main__":
 
             keep_item = input("\nChoose item to keep (0 or s = skip | 1 or b = best): ")
             if (keep_item.lower() != 's') and (keep_item.lower() == 'b' or 0 < int(keep_item) <= len(media_items)):
-                write_decision(title=item)
+                if cfg.DELETE_OR_RECORD == 'DELETE':
+                    write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if keep_item.lower() == 'b' and best_item is not None and best_item == part_info:
                         print("\tKeeping  : %r" % media_id)
-                        write_decision(keeping=part_info)
+                        if cfg.DELETE_OR_RECORD == 'DELETE':
+                            write_decision(keeping=part_info)
                     elif keep_item.lower() != 'b' and len(media_items) and media_id == media_items[int(keep_item)]:
                         print("\tKeeping  : %r" % media_id)
-                        write_decision(keeping=part_info)
+                        if cfg.DELETE_OR_RECORD == 'DELETE':
+                            write_decision(keeping=part_info)
                     else:
                         print("\tRemoving : %r" % media_id)
-                        delete_item(part_info['show_key'], media_id)
-                        write_decision(removed=part_info)
+                        if cfg.DELETE_OR_RECORD == 'DELETE':
+                            delete_item(part_info['show_key'], media_id)
+                            write_decision(removed=part_info)
+                        elif cfg.DELETE_OR_RECORD == 'RECORD':
+                            print("\t\tNot actually removing, but recording to files_to_remove.log")
+                            for i in part_info.get('file'):
+                                log_files_to_remove(i)
                         time.sleep(2)
             elif keep_item.lower() == 's' or int(keep_item) == 0:
                 print("Skipping deletion(s) for %r" % item)
@@ -452,18 +466,25 @@ if __name__ == "__main__":
 
             if keep_id:
                 # delete other items
-                write_decision(title=item)
+                if cfg.DELETE_OR_RECORD == 'DELETE':
+                    write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if media_id == keep_id:
                         print("\tKeeping  : %r - %r" % (media_id, part_info['file']))
-                        write_decision(keeping=part_info)
+                        if cfg.DELETE_OR_RECORD == 'DELETE':
+                            write_decision(keeping=part_info)
                     else:
                         print("\tRemoving : %r - %r" % (media_id, part_info['file']))
                         if should_skip(part_info['file']):
                             print("\tSkipping removal of this item as there is a match in SKIP_LIST")
                             continue
-                        delete_item(part_info['show_key'], media_id)
-                        write_decision(removed=part_info)
+                        elif cfg.DELETE_OR_RECORD == 'DELETE':
+                            delete_item(part_info['show_key'], media_id)
+                            write_decision(removed=part_info)
+                        elif cfg.DELETE_OR_RECORD == 'RECORD':
+                            print("\t\tNot actually removing, but recording to files_to_remove.log")
+                            for i in part_info.get('file'):
+                                log_files_to_remove(i)
                         time.sleep(2)
             else:
                 print("Unable to determine best media item to keep for %r", item)

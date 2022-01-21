@@ -14,6 +14,7 @@
     "wmapro": 200
   },
   "AUTO_DELETE": false,
+  "DELETE_OR_RECORD": "RECORD",
   "FIND_DUPLICATE_FILEPATHS_ONLY": false,
   "FILENAME_SCORES": {
     "*.avi": -1000,
