@@ -97,8 +97,8 @@ def get_score(media_info):
                 score += int(keyword_score)
                 log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
     # add bitrate to score
-    score += int(media_info['video_bitrate']) * 2
-    log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
+    #score += int(media_info['video_bitrate']) * 2
+    #log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
     # add duration to score
     score += int(media_info['video_duration']) / 300
     log.debug("Added %d to score for video duration", int(media_info['video_duration']) / 300)
@@ -109,8 +109,8 @@ def get_score(media_info):
     score += int(media_info['video_height']) * 2
     log.debug("Added %d to score for video height", int(media_info['video_height']) * 2)
     # add audio channels to score
-    score += int(media_info['audio_channels']) * 1000
-    log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
+    #score += int(media_info['audio_channels']) * 1000
+    #log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
     # add file size to score
     if cfg.SCORE_FILESIZE:
         score += int(media_info['file_size']) / 100000
@@ -201,9 +201,9 @@ def delete_item(show_key, media_id):
     delete_url = urljoin(cfg.PLEX_SERVER, '%s/media/%d' % (show_key, media_id))
     log.debug("Sending DELETE request to %r" % delete_url)
     if requests.delete(delete_url, headers={'X-Plex-Token': cfg.PLEX_TOKEN}).status_code == 200:
-        print("\t\tDeleted media item: %r" % media_id)
+        print("✨ Successfully deleted (%r)" % media_id)
     else:
-        print("\t\tError deleting media item: %r" % media_id)
+        print("⚠️ Deletion failed (%r)" % media_id)
 
 
 ############################################################
@@ -430,7 +430,7 @@ if __name__ == "__main__":
                 print("Unexpected response, skipping deletion(s) for %r" % item)
         else:
             # auto delete
-            print("\nDetermining best media item to keep for %r ..." % item)
+            print("\n> %r" % item)
             keep_score = 0
             keep_id = None
 
@@ -454,16 +454,17 @@ if __name__ == "__main__":
                 # delete other items
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
+                    shortenedFilePath = '/' + '/'.join(part_info['file'][0].split('/')[-3:])
                     if media_id == keep_id:
-                        print("\tKeeping  : %r - %r" % (media_id, part_info['file']))
+                        print("✅ %s (%d)" % (shortenedFilePath, media_id))
                         write_decision(keeping=part_info)
                     else:
-                        print("\tRemoving : %r - %r" % (media_id, part_info['file']))
                         if should_skip(part_info['file']):
-                            print("\tSkipping removal of this item as there is a match in SKIP_LIST")
-                            continue
-                        delete_item(part_info['show_key'], media_id)
-                        write_decision(removed=part_info)
-                        time.sleep(2)
+                            print("☑️ %s (%d)" % (shortenedFilePath, media_id))
+                        else:
+                            print("❌ %s (%d)" % (shortenedFilePath, media_id))
+                            delete_item(part_info['show_key'], media_id)
+                            write_decision(removed=part_info)
+                            time.sleep(2)
             else:
                 print("Unable to determine best media item to keep for %r", item)
