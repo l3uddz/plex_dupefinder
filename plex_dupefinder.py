@@ -201,9 +201,9 @@ def delete_item(show_key, media_id):
     delete_url = urljoin(cfg.PLEX_SERVER, '%s/media/%d' % (show_key, media_id))
     log.debug("Sending DELETE request to %r" % delete_url)
     if requests.delete(delete_url, headers={'X-Plex-Token': cfg.PLEX_TOKEN}).status_code == 200:
-        print("✨ Successfully deleted (%r)" % media_id)
+        print("✨ Successfully deleted 🆔%r" % media_id)
     else:
-        print("⚠️ Deletion failed (%r)" % media_id)
+        print("⚠️ Deletion failed 🆔%r" % media_id)
 
 
 ############################################################
@@ -234,6 +234,13 @@ def should_skip(files):
                 return True
     return False
 
+def allow_processing(parts):
+    # only if one of the items has one of the required words, processing is allowed
+    for media_id, part_info in parts:
+        for required_item in cfg.REQUIRED_TO_ALLOW_PROCESSING:
+            if required_item in str(part_info['file']):
+                return True
+    return False
 
 def millis_to_string(millis):
     """ reference: https://stackoverflow.com/a/35990338 """
@@ -453,18 +460,22 @@ if __name__ == "__main__":
             if keep_id:
                 # delete other items
                 write_decision(title=item)
-                for media_id, part_info in parts.items():
-                    shortenedFilePath = '/' + '/'.join(part_info['file'][0].split('/')[-3:])
-                    if media_id == keep_id:
-                        print("✅ %s (%d)" % (shortenedFilePath, media_id))
-                        write_decision(keeping=part_info)
-                    else:
-                        if should_skip(part_info['file']):
-                            print("☑️ %s (%d)" % (shortenedFilePath, media_id))
-                        else:
-                            print("❌ %s (%d)" % (shortenedFilePath, media_id))
-                            delete_item(part_info['show_key'], media_id)
-                            write_decision(removed=part_info)
-                            time.sleep(2)
+                if allow_processing(parts.items()):
+                    for media_id, part_info in parts.items():
+                            formatedScore = '{:,}'.format(part_info['score'])
+                            shortenedFilePath = '/' + '/'.join(part_info['file'][0].split('/')[-3:])
+                            if media_id == keep_id:
+                                print("✅%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
+                                write_decision(keeping=part_info)
+                            else:
+                                if should_skip(part_info['file']):
+                                    print("☑️%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
+                                else:
+                                    print("❌%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
+                                    delete_item(part_info['show_key'], media_id)
+                                    write_decision(removed=part_info)
+                                    time.sleep(2)
+                else:
+                    print("Processing blocked, missing requirements")
             else:
                 print("Unable to determine best media item to keep for %r", item)
