@@ -221,7 +221,7 @@ def write_decision(title=None, keeping=None, removed=None):
     if removed:
         lines.append('\tRemoving : %r\n' % removed)
 
-    with open(decision_filename, 'a') as fp:
+    with open(decision_filename, 'a', encoding="utf-8") as fp:
         fp.writelines(lines)
     return
 
