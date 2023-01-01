@@ -93,7 +93,7 @@ def get_score(media_info):
     # score filename
     for filename_keyword, keyword_score in cfg.FILENAME_SCORES.items():
         for filename in media_info['file']:
-            if fnmatch(os.path.basename(filename.lower()), filename_keyword.lower()):
+            if fnmatch(filename.lower(), filename_keyword.lower()):
                 score += int(keyword_score)
                 log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
     # add bitrate to score
@@ -472,9 +472,10 @@ if __name__ == "__main__":
                                     print("☑️%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
                                 else:
                                     print("❌%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
-                                    delete_item(part_info['show_key'], media_id)
                                     write_decision(removed=part_info)
-                                    time.sleep(2)
+                                    if not cfg.DEBUG_RUN:
+                                        delete_item(part_info['show_key'], media_id)
+                                        time.sleep(2)
                 else:
                     print("Processing blocked, missing requirements")
             else:
