@@ -1,10 +1,14 @@
-# User-specific stuff:
-.idea
+# MacOS
+.DS_Store
 
-## File-based project format:
+# Windows
+Thumbs.db
+
+# File-based project format
 *.iws
 
 # IntelliJ
+.idea
 /out/
 
 # Byte-compiled / optimized / DLL files
