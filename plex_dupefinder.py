@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import collections
+import itertools
 import logging
 import os
 import sys
@@ -35,10 +36,11 @@ log = logging.getLogger("Plex_Dupefinder")
 
 # Setup PlexServer object
 try:
-    plex = PlexServer(cfg.PLEX_SERVER, cfg.PLEX_TOKEN)
+    plex = PlexServer(cfg['PLEX_SERVER'], cfg['PLEX_TOKEN'])
 except:
-    log.exception("Exception connecting to server %r with token %r", cfg.PLEX_SERVER, cfg.PLEX_TOKEN)
-    print("Exception connecting to %s with token: %s" % (cfg.PLEX_SERVER, cfg.PLEX_TOKEN))
+    log.exception("Exception connecting to server %r with token %r", cfg['PLEX_SERVER'], cfg['PLEX_TOKEN'])
+    print(f"Exception connecting to {cfg['PLEX_SERVER']} with token: {cfg['PLEX_TOKEN']}")
+
     exit(1)
 
 
@@ -51,13 +53,10 @@ def get_dupes(plex_section_name):
     sec_type = get_section_type(plex_section_name)
     dupe_search_results = plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
     dupe_search_results_new = dupe_search_results.copy()
-
-    # filter out duplicates that do not have exact file path/name
-    if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+    if cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
         for dupe in dupe_search_results:
-            if not all(x == dupe.locations[0] for x in dupe.locations):
+            if any(x != dupe.locations[0] for x in dupe.locations):
                 dupe_search_results_new.remove(dupe)
-
     return dupe_search_results_new
 
 
@@ -73,27 +72,27 @@ def get_section_type(plex_section_name):
 def get_score(media_info):
     score = 0
     # score audio codec
-    for codec, codec_score in cfg.AUDIO_CODEC_SCORES.items():
+    for codec, codec_score in cfg['AUDIO_CODEC_SCORES'].items():
         if codec.lower() == media_info['audio_codec'].lower():
             score += int(codec_score)
             log.debug("Added %d to score for audio_codec being %r", int(codec_score), str(codec))
             break
     # score video codec
-    for codec, codec_score in cfg.VIDEO_CODEC_SCORES.items():
+    for codec, codec_score in cfg['VIDEO_CODEC_SCORES'].items():
         if codec.lower() == media_info['video_codec'].lower():
             score += int(codec_score)
             log.debug("Added %d to score for video_codec being %r", int(codec_score), str(codec))
             break
     # score video resolution
-    for resolution, resolution_score in cfg.VIDEO_RESOLUTION_SCORES.items():
+    for resolution, resolution_score in cfg['VIDEO_RESOLUTION_SCORES'].items():
         if resolution.lower() == media_info['video_resolution'].lower():
             score += int(resolution_score)
             log.debug("Added %d to score for video_resolution being %r", int(resolution_score), str(resolution))
             break
     # score filename
-    for filename_keyword, keyword_score in cfg.FILENAME_SCORES.items():
+    for filename_keyword, keyword_score in cfg['FILENAME_SCORES'].items():
         for filename in media_info['file']:
-            if fnmatch(filename.lower(), filename_keyword.lower()):
+            if fnmatch(os.path.basename(filename.lower()), filename_keyword.lower()):
                 score += int(keyword_score)
                 log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
     # add bitrate to score
@@ -112,7 +111,7 @@ def get_score(media_info):
     #score += int(media_info['audio_channels']) * 1000
     #log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
     # add file size to score
-    if cfg.SCORE_FILESIZE:
+    if cfg['SCORE_FILESIZE']:
         score += int(media_info['file_size']) / 100000
         log.debug("Added %d to score for total file size", int(media_info['file_size']) / 100000)
     return int(score)
@@ -178,8 +177,7 @@ def get_media_info(item):
         for part in item.parts:
             for stream in part.audioStreams():
                 if stream.channels:
-                    log.debug("Added %d channels for %s audioStream", stream.channels,
-                              stream.title if stream.title else 'Unknown')
+                    log.debug(f"Added {stream.channels} channels for {stream.title if stream.title else 'Unknown'} audioStream")
                     info['audio_channels'] += stream.channels
         if info['audio_channels'] == 0:
             info['audio_channels'] = item.audioChannels if item.audioChannels else 0
@@ -198,9 +196,9 @@ def get_media_info(item):
 
 
 def delete_item(show_key, media_id):
-    delete_url = urljoin(cfg.PLEX_SERVER, '%s/media/%d' % (show_key, media_id))
+    delete_url = urljoin(cfg['PLEX_SERVER'], '%s/media/%d' % (show_key, media_id))
     log.debug("Sending DELETE request to %r" % delete_url)
-    if requests.delete(delete_url, headers={'X-Plex-Token': cfg.PLEX_TOKEN}).status_code == 200:
+    if requests.delete(delete_url, headers={'X-Plex-Token': cfg['PLEX_TOKEN']}).status_code == 200:
         print("✨ Successfully deleted 🆔%r" % media_id)
     else:
         print("⚠️ Deletion failed 🆔%r" % media_id)
@@ -228,11 +226,7 @@ def write_decision(title=None, keeping=None, removed=None):
 
 
 def should_skip(files):
-    for files_item in files:
-        for skip_item in cfg.SKIP_LIST:
-            if skip_item in str(files_item):
-                return True
-    return False
+    return any(skip_item in str(files_item) for files_item, skip_item in itertools.product(files, cfg['SKIP_LIST']))
 
 def allow_processing(parts):
     # only if one of the items has one of the required words, processing is allowed
@@ -252,7 +246,7 @@ def millis_to_string(millis):
         hours = (millis / (1000 * 60 * 60)) % 24
         return "%02d:%02d:%02d" % (hours, minutes, seconds)
     except Exception:
-        log.exception("Exception occurred converting %d millis to readable string: ", millis)
+        log.exception(f"Exception occurred converting {millis} millis to readable string: ")
     return "%d milliseconds" % millis
 
 
@@ -262,9 +256,7 @@ def bytes_to_string(size_bytes):
     """
     try:
         if size_bytes == 1:
-            # because I really hate unnecessary plurals
             return "1 byte"
-
         suffixes_table = [('bytes', 0), ('KB', 0), ('MB', 1), ('GB', 2), ('TB', 2), ('PB', 2)]
 
         num = float(size_bytes)
@@ -272,15 +264,14 @@ def bytes_to_string(size_bytes):
             if num < 1024.0:
                 break
             num /= 1024.0
-
         if precision == 0:
             formatted_size = "%d" % num
         else:
             formatted_size = str(round(num, ndigits=precision))
-
-        return "%s %s" % (formatted_size, suffix)
+        return f"{formatted_size} {suffix}"
     except Exception:
-        log.exception("Exception occurred converting %d bytes to readable string: ", size_bytes)
+        log.exception(f"Exception occurred converting {size_bytes} bytes to readable string: ")
+
     return "%d bytes" % size_bytes
 
 
@@ -291,14 +282,14 @@ def kbps_to_string(size_kbps):
         else:
             return "{:.2f} Mbps".format(size_kbps / 1024.)
     except Exception:
-        log.exception("Exception occurred converting %d Kbps to readable string: ", size_kbps)
+        log.exception(f"Exception occurred converting {size_kbps} Kbps to readable string: ")
     return "%d Bbps" % size_kbps
 
 
 def build_tabulated(parts, items):
     headers = ['choice', 'score', 'id', 'file', 'size', 'duration', 'bitrate', 'resolution',
                'codecs']
-    if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+    if cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
         headers.remove('score')
 
     part_data = []
@@ -357,7 +348,7 @@ if __name__ == "__main__":
     process_later = {}
     # process sections
     print("Finding dupes...")
-    for section in cfg.PLEX_LIBRARIES:
+    for section in cfg['PLEX_LIBRARIES']:
         dupes = get_dupes(section)
         print("Found %d dupes for section %r" % (len(dupes), section))
         # loop returned duplicates
@@ -375,7 +366,7 @@ if __name__ == "__main__":
             parts = {}
             for part in item.media:
                 part_info = get_media_info(part)
-                if not cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+                if not cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
                     part_info['score'] = get_score(part_info)
                 part_info['show_key'] = item.key
                 log.info("ID: %r - Score: %s - Meta:\n%r", part.id, part_info.get('score', 'N/A'),
@@ -386,7 +377,7 @@ if __name__ == "__main__":
     # process processed items
     time.sleep(5)
     for item, parts in process_later.items():
-        if not cfg.AUTO_DELETE:
+        if not cfg['AUTO_DELETE']:
             partz = {}
             # manual delete
             print("\nWhich media item do you wish to keep for %r ?\n" % item)
@@ -394,7 +385,7 @@ if __name__ == "__main__":
             sort_key = None
             sort_order = None
 
-            if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+            if cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
                 sort_key = "id"
                 sort_order_reverse = False
             else:
@@ -403,11 +394,8 @@ if __name__ == "__main__":
 
             media_items = {}
             best_item = None
-            pos = 0
-
-            for media_id, part_info in collections.OrderedDict(
-                    sorted(parts.items(), key=lambda x: x[1][sort_key], reverse=sort_order_reverse)).items():
-                pos += 1
+            for pos, (media_id, part_info) in enumerate(collections.OrderedDict(
+                    sorted(parts.items(), key=lambda x: x[1][sort_key], reverse=sort_order_reverse)).items(), start=1):
                 if pos == 1:
                     best_item = part_info
                 media_items[pos] = media_id
@@ -441,7 +429,7 @@ if __name__ == "__main__":
             keep_score = 0
             keep_id = None
 
-            if cfg.FIND_DUPLICATE_FILEPATHS_ONLY:
+            if cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
                 # select lowest id to keep
                 for media_id, part_info in parts.items():
                     if keep_score == 0 and keep_id is None:
