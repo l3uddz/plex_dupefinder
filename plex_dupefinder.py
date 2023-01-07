@@ -231,7 +231,7 @@ def should_skip(files):
 def allow_processing(parts):
     # only if one of the items has one of the required words, processing is allowed
     for media_id, part_info in parts:
-        for required_item in cfg.REQUIRED_TO_ALLOW_PROCESSING:
+        for required_item in cfg['REQUIRED_TO_ALLOW_PROCESSING']:
             if required_item in str(part_info['file']):
                 return True
     return False
@@ -461,7 +461,7 @@ if __name__ == "__main__":
                                 else:
                                     print("❌%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
                                     write_decision(removed=part_info)
-                                    if not cfg.DEBUG_RUN:
+                                    if not cfg['DEBUG_RUN']:
                                         delete_item(part_info['show_key'], media_id)
                                         time.sleep(2)
                 else:
