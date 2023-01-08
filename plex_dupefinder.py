@@ -96,8 +96,9 @@ def get_score(media_info):
                 score += int(keyword_score)
                 log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
     # add bitrate to score
-    #score += int(media_info['video_bitrate']) * 2
-    #log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
+    if cfg['SCORE_VIDEOBITRATE']:
+        score += int(media_info['video_bitrate']) * 2
+        log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
     # add duration to score
     score += int(media_info['video_duration']) / 300
     log.debug("Added %d to score for video duration", int(media_info['video_duration']) / 300)
@@ -108,8 +109,9 @@ def get_score(media_info):
     score += int(media_info['video_height']) * 2
     log.debug("Added %d to score for video height", int(media_info['video_height']) * 2)
     # add audio channels to score
-    #score += int(media_info['audio_channels']) * 1000
-    #log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
+    if cfg['SCORE_AUDIOCHANNELS']:
+        score += int(media_info['audio_channels']) * 1000
+        log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
     # add file size to score
     if cfg['SCORE_FILESIZE']:
         score += int(media_info['file_size']) / 100000
