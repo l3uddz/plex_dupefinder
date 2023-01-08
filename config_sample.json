@@ -14,6 +14,7 @@
     "wmapro": 200
   },
   "AUTO_DELETE": false,
+  "DEBUG_RUN": false,
   "FIND_DUPLICATE_FILEPATHS_ONLY": false,
   "FILENAME_SCORES": {
     "*.avi": -1000,
@@ -42,6 +43,9 @@
   "PLEX_SERVER": "https://plex.your-server.com",
   "PLEX_TOKEN": "",
   "SCORE_FILESIZE": true,
+  "SCORE_VIDEOBITRATE": true,
+  "SCORE_AUDIOCHANNELS": true,
+  "REQUIRED_TO_ALLOW_PROCESSING": [],
   "SKIP_LIST": [],
   "VIDEO_CODEC_SCORES": {
     "Unknown": 0,
