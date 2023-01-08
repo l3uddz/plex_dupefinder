@@ -52,7 +52,6 @@ except:
 def get_dupes(plex_section_name):
     sec_type = get_section_type(plex_section_name)
     dupe_search_results = plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
-
     dupe_search_results_new = dupe_search_results.copy()
     if cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
         for dupe in dupe_search_results:
@@ -97,8 +96,9 @@ def get_score(media_info):
                 score += int(keyword_score)
                 log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
     # add bitrate to score
-    score += int(media_info['video_bitrate']) * 2
-    log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
+    if cfg['SCORE_VIDEOBITRATE']:
+        score += int(media_info['video_bitrate']) * 2
+        log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
     # add duration to score
     score += int(media_info['video_duration']) / 300
     log.debug("Added %d to score for video duration", int(media_info['video_duration']) / 300)
@@ -109,8 +109,9 @@ def get_score(media_info):
     score += int(media_info['video_height']) * 2
     log.debug("Added %d to score for video height", int(media_info['video_height']) * 2)
     # add audio channels to score
-    score += int(media_info['audio_channels']) * 1000
-    log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
+    if cfg['SCORE_AUDIOCHANNELS']:
+        score += int(media_info['audio_channels']) * 1000
+        log.debug("Added %d to score for audio channels", int(media_info['audio_channels']) * 1000)
     # add file size to score
     if cfg['SCORE_FILESIZE']:
         score += int(media_info['file_size']) / 100000
@@ -200,9 +201,9 @@ def delete_item(show_key, media_id):
     delete_url = urljoin(cfg['PLEX_SERVER'], '%s/media/%d' % (show_key, media_id))
     log.debug("Sending DELETE request to %r" % delete_url)
     if requests.delete(delete_url, headers={'X-Plex-Token': cfg['PLEX_TOKEN']}).status_code == 200:
-        print("\t\tDeleted media item: %r" % media_id)
+        print("✨ Successfully deleted 🆔%r" % media_id)
     else:
-        print("\t\tError deleting media item: %r" % media_id)
+        print("⚠️ Deletion failed 🆔%r" % media_id)
 
 
 ############################################################
@@ -229,6 +230,13 @@ def write_decision(title=None, keeping=None, removed=None):
 def should_skip(files):
     return any(skip_item in str(files_item) for files_item, skip_item in itertools.product(files, cfg['SKIP_LIST']))
 
+def allow_processing(parts):
+    # only if one of the items has one of the required words, processing is allowed
+    for media_id, part_info in parts:
+        for required_item in cfg['REQUIRED_TO_ALLOW_PROCESSING']:
+            if required_item in str(part_info['file']):
+                return True
+    return False
 
 def millis_to_string(millis):
     """ reference: https://stackoverflow.com/a/35990338 """
@@ -419,7 +427,7 @@ if __name__ == "__main__":
                 print("Unexpected response, skipping deletion(s) for %r" % item)
         else:
             # auto delete
-            print("\nDetermining best media item to keep for %r ..." % item)
+            print("\n> %r" % item)
             keep_score = 0
             keep_id = None
 
@@ -442,17 +450,23 @@ if __name__ == "__main__":
             if keep_id:
                 # delete other items
                 write_decision(title=item)
-                for media_id, part_info in parts.items():
-                    if media_id == keep_id:
-                        print("\tKeeping  : %r - %r" % (media_id, part_info['file']))
-                        write_decision(keeping=part_info)
-                    else:
-                        print("\tRemoving : %r - %r" % (media_id, part_info['file']))
-                        if should_skip(part_info['file']):
-                            print("\tSkipping removal of this item as there is a match in SKIP_LIST")
-                            continue
-                        delete_item(part_info['show_key'], media_id)
-                        write_decision(removed=part_info)
-                        time.sleep(2)
+                if allow_processing(parts.items()):
+                    for media_id, part_info in parts.items():
+                            formatedScore = '{:,}'.format(part_info['score'])
+                            shortenedFilePath = '/' + '/'.join(part_info['file'][0].split('/')[-3:])
+                            if media_id == keep_id:
+                                print("✅%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
+                                write_decision(keeping=part_info)
+                            else:
+                                if should_skip(part_info['file']):
+                                    print("☑️%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
+                                else:
+                                    print("❌%s🔺 %s 🆔%d" % (formatedScore, shortenedFilePath, media_id))
+                                    write_decision(removed=part_info)
+                                    if not cfg['DEBUG_RUN']:
+                                        delete_item(part_info['show_key'], media_id)
+                                        time.sleep(2)
+                else:
+                    print("Processing blocked, missing requirements")
             else:
                 print("Unable to determine best media item to keep for %r", item)
