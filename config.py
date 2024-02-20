@@ -10,6 +10,7 @@ from getpass import getpass
 
 config_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'config.json')
 base_config = {
+    'DRY_RUN': False,
     'PLEX_SERVER': 'https://plex.your-server.com',
     'PLEX_TOKEN': '',
     'PLEX_LIBRARIES': {},
