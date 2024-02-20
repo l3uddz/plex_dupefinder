@@ -24,7 +24,10 @@ base_config = {
     'SKIP_LIST': [],
     'SCORE_FILESIZE': True,
     'AUTO_DELETE': False,
+    'SKIP_OTHER_DUPES': False,
     'SKIP_PLEX_VERSIONS_FOLDER': True,
+    'FIND_UNAVAILABLE': False,
+    'FIND_EXTRA_TS': False,
     'FIND_DUPLICATE_FILEPATHS_ONLY': False
 }
 cfg = None
