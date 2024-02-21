@@ -10,6 +10,7 @@ from getpass import getpass
 
 config_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'config.json')
 base_config = {
+    'DRY_RUN': False,
     'PLEX_SERVER': 'https://plex.your-server.com',
     'PLEX_TOKEN': '',
     'PLEX_LIBRARIES': {},
@@ -23,6 +24,10 @@ base_config = {
     'SKIP_LIST': [],
     'SCORE_FILESIZE': True,
     'AUTO_DELETE': False,
+    'SKIP_OTHER_DUPES': False,
+    'SKIP_PLEX_VERSIONS_FOLDER': True,
+    'FIND_UNAVAILABLE': False,
+    'FIND_EXTRA_TS': False,
     'FIND_DUPLICATE_FILEPATHS_ONLY': False
 }
 cfg = None
