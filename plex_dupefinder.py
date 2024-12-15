@@ -66,6 +66,7 @@ def get_section_type(plex_section_name):
         plex_section_type = plex.library.section(plex_section_name).type
     except Exception:
         log.exception("Exception occurred while trying to lookup the section type for Library: %s", plex_section_name)
+        print(f'Error accessing library "{plex_section_name}" - Does this library specified in the config exist on the Plex server?')
         exit(1)
     return 'episode' if plex_section_type == 'show' else 'movie'
 
