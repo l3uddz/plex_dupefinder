@@ -27,6 +27,7 @@ import requests
 log_filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'activity.log')
 logging.basicConfig(
     filename=log_filename,
+    encoding='utf-8',
     level=logging.DEBUG,
     format='[%(asctime)s] %(levelname)s - %(message)s',
     datefmt='%H:%M:%S'
@@ -221,7 +222,7 @@ def write_decision(title=None, keeping=None, removed=None):
     if removed:
         lines.append('\tRemoving : %r\n' % removed)
 
-    with open(decision_filename, 'a') as fp:
+    with open(decision_filename, 'a', encoding="utf-8") as fp:
         fp.writelines(lines)
     return
 
