@@ -348,6 +348,11 @@ if __name__ == "__main__":
         # loop returned duplicates
         for item in dupes:
             if item.type == 'episode':
+                if item.index == None:
+                  #print(f"error on {item.seasonEpisode} of {item.grandparentTitle} - no item index")
+                  title = "%s - %02dx%02d - %s" % (
+                    item.grandparentTitle, int(item.parentIndex), -1, item.title)
+                  continue
                 title = "%s - %02dx%02d - %s" % (
                     item.grandparentTitle, int(item.parentIndex), int(item.index), item.title)
             elif item.type == 'movie':
