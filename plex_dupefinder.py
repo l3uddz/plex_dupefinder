@@ -5,6 +5,8 @@ import logging
 import os
 import sys
 import time
+import argparse
+import shutil
 from fnmatch import fnmatch
 
 from tabulate import tabulate
@@ -196,14 +198,239 @@ def get_media_info(item):
     return info
 
 
-def delete_item(show_key, media_id):
-    delete_url = urljoin(cfg['PLEX_SERVER'], '%s/media/%d' % (show_key, media_id))
+def delete_item(media_type, show_key, media_id, mode='plex'):
+    """
+    Delete a media item from Plex and optionally from disk.
+    
+    Args:
+        media_type (str): Type of media ('movie' or 'episode')
+        show_key (str): The show key for the media item
+        media_id (int): The ID of the media item to delete
+        mode (str): The deletion mode ('plex', 'hard-delete', or 'both')
+        
+    Returns:
+        dict: Dictionary with API and filesystem deletion results
+    """
+    if media_type == 'movie':
+        # For movies, delete the entire metadata record.
+        delete_url = urljoin(cfg['PLEX_SERVER'], 'library/metadata/%d' % media_id)
+    elif media_type == 'episode':
+        # For episodes, if you want to delete the entire episode entry, you could also use the metadata endpoint.
+        # Alternatively, if you intend to delete just the media part, you might need:
+        delete_url = urljoin(cfg['PLEX_SERVER'], '%s/media/%d' % (show_key, media_id))
     log.debug("Sending DELETE request to %r" % delete_url)
-    if requests.delete(delete_url, headers={'X-Plex-Token': cfg['PLEX_TOKEN']}).status_code == 200:
-        print("\t\tDeleted media item: %r" % media_id)
-    else:
-        print("\t\tError deleting media item: %r" % media_id)
+    
+    result = {
+        'api_success': False,
+        'filesystem_success': False
+    }
+    file_paths = []
+    
+    # Only perform Plex API deletion if mode is 'plex' or 'both'
+    if mode in ['plex', 'both']:
+        try:
+            start_time = time.time()
+            response = requests.delete(delete_url, headers={'X-Plex-Token': cfg['PLEX_TOKEN']})
+            elapsed_time = time.time() - start_time
+            log.debug("Delete response - Status: %d, Time: %.2fs, URL: %s",
+                    response.status_code, elapsed_time, delete_url)
+            if response.status_code in (200, 204):
+                # Verify the item is actually gone by trying to fetch it
+                verification_success = verify_item_deleted(media_type, media_id)
+                if verification_success:
+                    print("\t\tSuccessfully deleted media item: %r" % media_id)
+                    log.info("Successfully deleted media item %r from %r", media_id, show_key)
+                    result['api_success'] = True
+                else:
+                    error_msg = f"API reported success but item {media_id} still exists in Plex"
+                    print(f"\t\t{error_msg}")
+                    log.error(error_msg)
+            else:
+                error_msg = f"Failed to delete media item {media_id} (Status: {response.status_code})"
+                print(f"\t\t{error_msg}")
+                log.error(error_msg)
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Network error deleting media item {media_id}: {str(e)}"
+            print(f"\t\t{error_msg}")
+            log.exception(error_msg)
+        except Exception as e:
+            error_msg = f"Unexpected error deleting media item {media_id}: {str(e)}"
+            print(f"\t\t{error_msg}")
+            log.exception(error_msg)
+    
+    # Perform filesystem deletion if mode is 'hard-delete' or 'both'
+    # or if mode is 'plex' and API deletion failed
+    if mode == 'hard-delete' or mode == 'both' or (mode == 'plex' and not result['api_success']):
+        if mode == 'plex' and not result['api_success']:
+            print(f"\t\tAPI delete failed, attempting hard delete from disk for media ID {media_id}")
+            log.info(f"API delete failed for media ID {media_id}, attempting hard delete from disk")
+        else:
+            print(f"\t\tPerforming hard delete from disk for media ID {media_id}")
+            log.info(f"Performing hard delete from disk for media ID {media_id}")
+        
+        try:
+            file_paths = _get_file_paths_for_media_id(media_id)
+            log.debug(f"File paths for media ID {media_id}: {file_paths}")
+            
+            if file_paths:
+                if media_type == 'movie':
+                    _handle_movie_deletion(file_paths, media_id)
+                else:
+                    _handle_episode_deletion(file_paths)
+                result['filesystem_success'] = True
+            else:
+                print("\t\tNo file paths found for hard delete")
+                log.warning(f"No file paths found for hard delete of media ID {media_id}")
+        except Exception as e:
+            error_msg = f"Error during hard delete of media ID {media_id}: {str(e)}"
+            print(f"\t\t{error_msg}")
+            log.exception(error_msg)
+    
+    log.info(f"Delete results - API: {result['api_success']}, Filesystem: {result['filesystem_success']}, File paths: {file_paths}")
+    return result
 
+
+def verify_item_deleted(media_type, media_id):
+    """
+    Verify that an item has been deleted from Plex by attempting to fetch it.
+    
+    Args:
+        media_type (str): Type of media ('movie' or 'episode')
+        media_id (int): The ID of the media item to verify
+        
+    Returns:
+        bool: True if the item is confirmed to be deleted (not found), False otherwise
+    """
+    try:
+        # Construct the URL to fetch the item
+        fetch_url = urljoin(cfg['PLEX_SERVER'], f'library/metadata/{media_id}')
+        log.debug(f"Verifying deletion by fetching: {fetch_url}")
+        
+        # Add a small delay to allow Plex to process the deletion
+        time.sleep(1)
+        
+        # Try to fetch the item
+        response = requests.get(fetch_url, headers={'X-Plex-Token': cfg['PLEX_TOKEN']})
+        
+        # If we get a 404, the item is gone (success)
+        if response.status_code == 404:
+            log.debug(f"Verification successful - item {media_id} not found in Plex")
+            return True
+        else:
+            log.warning(f"Verification failed - item {media_id} still exists (status: {response.status_code})")
+            return False
+    except Exception as e:
+        log.exception(f"Error verifying deletion of item {media_id}: {str(e)}")
+        # If we can't verify, assume it failed
+        return False
+
+# Move this to the top, before any function definitions
+process_later = {}
+
+def _get_file_paths_for_media_id(media_id):
+    """
+    Helper function to get file paths for a given media ID.
+    """
+    file_paths = []
+    log.debug(f"Looking up file paths for media ID {media_id}")
+    for item_title, parts_dict in process_later.items():
+        for part_id, part_info in parts_dict.items():
+            log.debug(f"Checking part_id {part_id} for media_id {media_id}")
+            if str(part_id) == str(media_id):
+                file_paths = part_info['file']
+                log.debug(f"Found file paths for media ID {media_id}: {file_paths}")
+                break
+    if not file_paths:
+        log.warning(f"No file paths found for media ID {media_id}")
+    return file_paths
+
+
+def _handle_movie_deletion(file_paths, media_id):
+    """
+    Handle deletion of movie files, considering shared directories.
+    
+    Args:
+        file_paths (list): List of file paths to delete
+        media_id (int): The ID of the media item
+    """
+    # Get all file paths for all titles to check for shared directories
+    all_files = []
+    for parts_dict in process_later.values():
+        for part_info in parts_dict.values():
+            all_files.extend(part_info['file'])
+    
+    for file_path in file_paths:
+        log.debug(f"Attempting to delete file: {file_path}")
+        if not os.path.exists(file_path):
+            log.warning(f"File does not exist: {file_path}")
+            continue
+            
+        movie_dir = os.path.dirname(file_path)
+        
+        # Check if any other files in this directory should be kept
+        shared_directory = False
+        for other_file in all_files:
+            if other_file != file_path and os.path.dirname(other_file) == movie_dir:
+                shared_directory = True
+                break
+        
+        try:
+            if shared_directory:
+                # If directory is shared, just delete the specific file
+                print(f"\t\tDetected shared directory. Hard deleting only file: {file_path}")
+                log.info(f"Detected shared directory. Hard deleting only file: {file_path}")
+                os.remove(file_path)
+                log.debug(f"os.remove called for {file_path}")
+            else:
+                # If directory is not shared, delete the entire directory
+                print(f"\t\tHard deleting movie directory: {movie_dir}")
+                log.info(f"Hard deleting movie directory: {movie_dir}")
+                shutil.rmtree(movie_dir, ignore_errors=True)
+                log.debug(f"shutil.rmtree called for {movie_dir}")
+            
+            # Verify deletion
+            if not os.path.exists(file_path):
+                print(f"\t\tSuccessfully removed file from disk: {file_path}")
+                log.info(f"Successfully removed file from disk: {file_path}")
+            else:
+                print(f"\t\tFailed to remove file from disk: {file_path}")
+                log.error(f"Failed to remove file from disk: {file_path}")
+        except PermissionError as e:
+            print(f"\t\tPermission error deleting {file_path}: {str(e)}")
+            log.error(f"Permission error deleting {file_path}: {str(e)}")
+        except OSError as e:
+            print(f"\t\tOS error deleting {file_path}: {str(e)}")
+            log.error(f"OS error deleting {file_path}: {str(e)}")
+
+
+def _handle_episode_deletion(file_paths):
+    """
+    Handle deletion of episode files.
+    
+    Args:
+        file_paths (list): List of file paths to delete
+    """
+    for file_path in file_paths:
+        log.debug(f"Attempting to delete file: {file_path}")
+        try:
+            print(f"\t\tHard deleting file: {file_path}")
+            log.info(f"Hard deleting file: {file_path}")
+            os.remove(file_path)
+            log.debug(f"os.remove called for {file_path}")
+            
+            # Verify deletion
+            if not os.path.exists(file_path):
+                print(f"\t\tSuccessfully removed file from disk: {file_path}")
+                log.info(f"Successfully removed file from disk: {file_path}")
+            else:
+                print(f"\t\tFailed to remove file from disk: {file_path}")
+                log.error(f"Failed to remove file from disk: {file_path}")
+        except PermissionError as e:
+            print(f"\t\tPermission error deleting {file_path}: {str(e)}")
+            log.error(f"Permission error deleting {file_path}: {str(e)}")
+        except OSError as e:
+            print(f"\t\tOS error deleting {file_path}: {str(e)}")
+            log.error(f"OS error deleting {file_path}: {str(e)}")
 
 ############################################################
 # MISC METHODS
@@ -320,8 +547,31 @@ def build_tabulated(parts, items):
 # MAIN
 ############################################################
 
+def rescan_libraries():
+    """
+    Trigger a rescan of all Plex libraries that were configured in the settings.
+    """
+    print("\nTriggering library rescan for all configured libraries...")
+    for section in cfg['PLEX_LIBRARIES']:
+        try:
+            library = plex.library.section(section)
+            library.update()
+            print(f"Initiated rescan for library: {section}")
+            log.info(f"Initiated rescan for library: {section}")
+        except Exception as e:
+            print(f"Failed to initiate rescan for library {section}: {str(e)}")
+            log.error(f"Failed to initiate rescan for library {section}: {str(e)}")
+    print("Library rescans initiated. This may take some time to complete.")
+
 if __name__ == "__main__":
-    print("""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Find and remove duplicate media from Plex")
+    parser.add_argument('--mode', choices=['plex', 'hard-delete', 'both'], default='plex',
+                        help='Deletion mode: "plex" (remove from Plex only), "hard-delete" (physically delete files), '
+                             'or "both" (remove from Plex and delete files)')
+    args = parser.parse_args()
+    
+    print(r"""
        _                 _                   __ _           _
  _ __ | | _____  __   __| |_   _ _ __   ___ / _(_)_ __   __| | ___ _ __
 | '_ \| |/ _ \ \/ /  / _` | | | | '_ \ / _ \ |_| | '_ \ / _` |/ _ \ '__|
@@ -338,10 +588,13 @@ if __name__ == "__main__":
 #                   GNU General Public License v3.0                     #
 #########################################################################
 """)
+    if args.mode in ['hard-delete', 'both']:
+        print(f"WARNING: {args.mode.upper()} mode enabled - files will be physically removed from disk!")
+        
     print("Initialized")
-    process_later = {}
     # process sections
     print("Finding dupes...")
+    
     for section in cfg['PLEX_LIBRARIES']:
         dupes = get_dupes(section)
         print("Found %d dupes for section %r" % (len(dupes), section))
@@ -363,18 +616,23 @@ if __name__ == "__main__":
                 if not cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
                     part_info['score'] = get_score(part_info)
                 part_info['show_key'] = item.key
+                part_info['media_type'] = item.type  # Store the media type (movie or episode)
                 log.info("ID: %r - Score: %s - Meta:\n%r", part.id, part_info.get('score', 'N/A'),
                          part_info)
                 parts[part.id] = part_info
             process_later[title] = parts
 
+    # Track if any filesystem deletions occurred
+    filesystem_deletions_occurred = False
+    
     # process processed items
     time.sleep(5)
-    for item, parts in process_later.items():
+    total_items = len(process_later)
+    for current_index, (item, parts) in enumerate(process_later.items(), 1):
         if not cfg['AUTO_DELETE']:
             partz = {}
             # manual delete
-            print("\nWhich media item do you wish to keep for %r ?\n" % item)
+            print("\nWhich media item do you wish to keep for %r ? [%d/%d]\n" % (item, current_index, total_items))
 
             sort_key = None
             sort_order = None
@@ -402,6 +660,7 @@ if __name__ == "__main__":
             if (keep_item.lower() != 's') and (keep_item.lower() == 'b' or 0 < int(keep_item) <= len(media_items)):
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
+                    # In the manual delete section (around line 470)
                     if keep_item.lower() == 'b' and best_item is not None and best_item == part_info:
                         print("\tKeeping  : %r" % media_id)
                         write_decision(keeping=part_info)
@@ -410,9 +669,12 @@ if __name__ == "__main__":
                         write_decision(keeping=part_info)
                     else:
                         print("\tRemoving : %r" % media_id)
-                        delete_item(part_info['show_key'], media_id)
+                        result = delete_item(part_info['media_type'], part_info['show_key'], media_id, args.mode)
+                        if args.mode in ['hard-delete', 'both'] and result['filesystem_success']:
+                            filesystem_deletions_occurred = True
                         write_decision(removed=part_info)
                         time.sleep(2)
+                                        
             elif keep_item.lower() == 's' or int(keep_item) == 0:
                 print("Skipping deletion(s) for %r" % item)
             else:
@@ -451,8 +713,14 @@ if __name__ == "__main__":
                         if should_skip(part_info['file']):
                             print("\tSkipping removal of this item as there is a match in SKIP_LIST")
                             continue
-                        delete_item(part_info['show_key'], media_id)
+                        result = delete_item(part_info['media_type'], part_info['show_key'], media_id, args.mode)
+                        if args.mode in ['hard-delete', 'both'] and result['filesystem_success']:
+                            filesystem_deletions_occurred = True
                         write_decision(removed=part_info)
                         time.sleep(2)
             else:
                 print("Unable to determine best media item to keep for %r", item)
+    
+    # Rescan libraries if filesystem deletions occurred
+    if filesystem_deletions_occurred:
+        rescan_libraries()
