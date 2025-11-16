@@ -35,12 +35,20 @@ logging.getLogger('urllib3.connectionpool').disabled = True
 log = logging.getLogger("Plex_Dupefinder")
 
 # Setup PlexServer object
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Create a global session with SSL verification disabled
+plex_session = requests.Session()
+plex_session.verify = False
+
 try:
-    plex = PlexServer(cfg['PLEX_SERVER'], cfg['PLEX_TOKEN'])
-except:
+    plex = PlexServer(cfg['PLEX_SERVER'], cfg['PLEX_TOKEN'], session=plex_session)
+except Exception as e:
     log.exception("Exception connecting to server %r with token %r", cfg['PLEX_SERVER'], cfg['PLEX_TOKEN'])
     print(f"Exception connecting to {cfg['PLEX_SERVER']} with token: {cfg['PLEX_TOKEN']}")
-
+    print(f"Error type: {type(e).__name__}")
+    print(f"Error details: {str(e)}")
     exit(1)
 
 
@@ -199,7 +207,7 @@ def get_media_info(item):
 def delete_item(show_key, media_id):
     delete_url = urljoin(cfg['PLEX_SERVER'], '%s/media/%d' % (show_key, media_id))
     log.debug("Sending DELETE request to %r" % delete_url)
-    if requests.delete(delete_url, headers={'X-Plex-Token': cfg['PLEX_TOKEN']}).status_code == 200:
+    if plex_session.delete(delete_url, headers={'X-Plex-Token': cfg['PLEX_TOKEN']}).status_code == 200:
         print("\t\tDeleted media item: %r" % media_id)
     else:
         print("\t\tError deleting media item: %r" % media_id)
@@ -324,9 +332,9 @@ if __name__ == "__main__":
     print("""
        _                 _                   __ _           _
  _ __ | | _____  __   __| |_   _ _ __   ___ / _(_)_ __   __| | ___ _ __
-| '_ \| |/ _ \ \/ /  / _` | | | | '_ \ / _ \ |_| | '_ \ / _` |/ _ \ '__|
+| '_ \\| |/ _ \\ \\/ /  / _` | | | | '_ \\ / _ \\ |_| | '_ \\ / _` |/ _ \\ '__|
 | |_) | |  __/>  <  | (_| | |_| | |_) |  __/  _| | | | | (_| |  __/ |
-| .__/|_|\___/_/\_\  \__,_|\__,_| .__/ \___|_| |_|_| |_|\__,_|\___|_|
+| .__/|_|\\___/_/\\_\\  \\__,_|\\__,_| .__/ \\___|_| |_|_| |_|\\__,_|\\___|_|
 |_|                             |_|
 
 #########################################################################
@@ -398,8 +406,28 @@ if __name__ == "__main__":
             headers, data = build_tabulated(partz, media_items)
             print(tabulate(data, headers=headers))
 
-            keep_item = input("\nChoose item to keep (0 or s = skip | 1 or b = best): ")
-            if (keep_item.lower() != 's') and (keep_item.lower() == 'b' or 0 < int(keep_item) <= len(media_items)):
+            keep_item = None
+            while keep_item is None:
+                user_input = input("\nChoose item to keep (0 or s = skip | 1 or b = best): ").strip()
+                try:
+                    # Check if input is valid
+                    if user_input.lower() == 's' or user_input == '0':
+                        keep_item = user_input
+                        print("Skipping deletion(s) for %r" % item)
+                        break
+                    elif user_input.lower() == 'b':
+                        keep_item = user_input
+                    elif user_input.isdigit() and 0 < int(user_input) <= len(media_items):
+                        keep_item = user_input
+                    else:
+                        print(f"Invalid input '{user_input}'. Please enter a number between 1-{len(media_items)}, 'b' for best, 's' to skip, or '0' to skip.")
+                        continue
+                except (ValueError, KeyError):
+                    print(f"Invalid input '{user_input}'. Please enter a number between 1-{len(media_items)}, 'b' for best, 's' to skip, or '0' to skip.")
+                    continue
+
+            # Process the valid choice
+            if keep_item and keep_item.lower() not in ['s'] and keep_item != '0':
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if keep_item.lower() == 'b' and best_item is not None and best_item == part_info:
@@ -413,10 +441,6 @@ if __name__ == "__main__":
                         delete_item(part_info['show_key'], media_id)
                         write_decision(removed=part_info)
                         time.sleep(2)
-            elif keep_item.lower() == 's' or int(keep_item) == 0:
-                print("Skipping deletion(s) for %r" % item)
-            else:
-                print("Unexpected response, skipping deletion(s) for %r" % item)
         else:
             # auto delete
             print("\nDetermining best media item to keep for %r ..." % item)

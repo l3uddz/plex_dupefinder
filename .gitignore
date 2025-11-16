@@ -1,6 +1,6 @@
 # User-specific stuff:
 .idea
-
+*.bak
 ## File-based project format:
 *.iws
 

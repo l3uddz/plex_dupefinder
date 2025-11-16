@@ -81,6 +81,9 @@ def build_config():
 
     # Get Credentials for plex.tv
     user = input("Plex Username: ")
+    print("\nNOTE: If your Plex account uses 2FA (Two-Factor Authentication),")
+    print("      use your password in the format: PASSWORDTOKEN")
+    print("      (e.g., if password is 'mypass' and token is '123456', use 'mypass123456')\n")
     password = getpass('Plex Password: ')
 
     # Get choice for Auto Deletion
