@@ -49,3 +49,7 @@ pip-selfcheck.json
 
 # Venv
 venv/
+
+activity.log
+.history/
+config.json

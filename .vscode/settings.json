@@ -1,0 +1,7 @@
+{
+    "snyk.advanced.autoSelectOrganization": true,
+    "datadog.ust.service.setup.linkedNames": [
+        "plex_dupefinder"
+    ],
+    "datadog.ust.environment.setup.focusedName": "production"
+}

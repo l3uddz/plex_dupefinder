@@ -1,101 +1,159 @@
 #!/usr/bin/env python3
+
+# https://github.com/adilusprimus/plex_dupefinder
+
+# Set Datadog environment variables early
+import os
+os.environ['DD_SERVICE'] = 'plex_dupefinder'
+os.environ['DD_REQUESTS_SERVICE'] = 'plex'
+os.environ['DD_ENV'] = 'production'
+os.environ['DD_VERSION'] = '1.0.6'
+os.environ['DD_TRACE_DEBUG'] = 'false'
+
+import ddtrace.sourcecode.setuptools_auto
+import sys
+import logging
 import collections
-import itertools
+import concurrent.futures
 import logging
 import os
 import sys
 import time
+from functools import lru_cache
 from fnmatch import fnmatch
-
 from tabulate import tabulate
-
 from config import cfg
-
 try:
     from urlparse import urljoin
 except ImportError:
     from urllib.parse import urljoin
-
 from plexapi.server import PlexServer
 import requests
+from ddtrace.debugging import DynamicInstrumentation
+from ddtrace import tracer    
+from openfeature.evaluation_context import EvaluationContext
+
+# Start the Datadog tracer
+tracer.configure()
+
+# Create and register the Datadog OpenFeature provider
+# DynamicInstrumentation.enable()  # Disabled due to probe installation conflicts
+from ddtrace import patch
+patch(logging=True)
+patch(requests=True)
 
 ############################################################
 # INIT
 ############################################################
 
 # Setup logger
+FORMAT = ('%(asctime)s %(levelname)s [%(name)s] [%(filename)s:%(lineno)d] '
+          '[dd.service=%(dd.service)s dd.env=%(dd.env)s dd.version=%(dd.version)s dd.trace_id=%(dd.trace_id)s dd.span_id=%(dd.span_id)s] '
+          '- %(message)s')
+
+
 log_filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'activity.log')
 logging.basicConfig(
     filename=log_filename,
     level=logging.DEBUG,
-    format='[%(asctime)s] %(levelname)s - %(message)s',
-    datefmt='%H:%M:%S'
+    format=FORMAT,
+    datefmt="%Y-%m-%d %H:%M:%S"
 )
 logging.getLogger('urllib3.connectionpool').disabled = True
-log = logging.getLogger("Plex_Dupefinder")
 
-# Setup PlexServer object
+# Set JSON formatter for file handler
+from pythonjsonlogger import jsonlogger
+for handler in logging.getLogger().handlers:
+    if isinstance(handler, logging.FileHandler):
+        handler.setFormatter(jsonlogger.JsonFormatter(FORMAT))
+
+# Add console handler for simultaneous console output
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter('%(asctime)s %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
+logging.getLogger('').addHandler(console_handler)
+
+log = logging.getLogger(__name__) 
+
+# Optional OpenFeature support
 try:
-    plex = PlexServer(cfg['PLEX_SERVER'], cfg['PLEX_TOKEN'])
-except:
-    log.exception("Exception connecting to server %r with token %r", cfg['PLEX_SERVER'], cfg['PLEX_TOKEN'])
-    print(f"Exception connecting to {cfg['PLEX_SERVER']} with token: {cfg['PLEX_TOKEN']}")
+    from openfeature import api as openfeature_api
+    from ddtrace.openfeature import DatadogProvider
+    from openfeature.evaluation_context import EvaluationContext
+except Exception:
+    openfeature_api = None
+    DatadogProvider = None
+    EvaluationContext = None
 
-    exit(1)
+if openfeature_api and DatadogProvider:
+    provider = DatadogProvider()
+    openfeature_api.set_provider(provider)
 
+    client = openfeature_api.get_client("plex_dupefinder")
+
+    eval_ctx = EvaluationContext(
+        targeting_key="Test",
+        attributes={"userId": "tester", "userRole": "tester"},
+    )
+
+    value = client.get_boolean_value(
+        flag_key="feature-flag-test",
+        default_value=False,
+        evaluation_context=eval_ctx,
+    )
+else:
+    log.warning("OpenFeature is not available on this Python version; skipping feature flag setup.") 
+
+AUDIO_CODEC_SCORES = {codec.lower(): int(score) for codec, score in cfg['AUDIO_CODEC_SCORES'].items()}
+VIDEO_CODEC_SCORES = {codec.lower(): int(score) for codec, score in cfg['VIDEO_CODEC_SCORES'].items()}
+VIDEO_RESOLUTION_SCORES = {resolution.lower(): int(score) for resolution, score in cfg['VIDEO_RESOLUTION_SCORES'].items()}
+FILENAME_SCORE_RULES = tuple((pattern.lower(), int(score)) for pattern, score in cfg['FILENAME_SCORES'].items())
+SKIP_LIST = tuple(skip_item.lower() for skip_item in cfg['SKIP_LIST'])
 
 ############################################################
 # PLEX METHODS
 ############################################################
 
-
 def get_dupes(plex_section_name):
-    sec_type = get_section_type(plex_section_name)
-    dupe_search_results = plex.library.section(plex_section_name).search(duplicate=True, libtype=sec_type)
-
-    dupe_search_results_new = dupe_search_results.copy()
-    if cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
-        for dupe in dupe_search_results:
-            if any(x != dupe.locations[0] for x in dupe.locations):
-                dupe_search_results_new.remove(dupe)
-    return dupe_search_results_new
-
-
-def get_section_type(plex_section_name):
     try:
-        plex_section_type = plex.library.section(plex_section_name).type
+        plex_section = plex.library.section(plex_section_name)
+        sec_type = 'episode' if plex_section.type == 'show' else 'movie'
     except Exception:
         log.exception("Exception occurred while trying to lookup the section type for Library: %s", plex_section_name)
         exit(1)
-    return 'episode' if plex_section_type == 'show' else 'movie'
+
+    dupe_search_results = plex_section.search(duplicate=True, libtype=sec_type)
+
+    if not cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
+        return dupe_search_results
+
+    return [dupe for dupe in dupe_search_results if all(location == dupe.locations[0] for location in dupe.locations)]
 
 
 def get_score(media_info):
     score = 0
     # score audio codec
-    for codec, codec_score in cfg['AUDIO_CODEC_SCORES'].items():
-        if codec.lower() == media_info['audio_codec'].lower():
-            score += int(codec_score)
-            log.debug("Added %d to score for audio_codec being %r", int(codec_score), str(codec))
-            break
+    audio_codec_score = AUDIO_CODEC_SCORES.get(media_info['audio_codec'].lower(), 0)
+    score += audio_codec_score
+    if audio_codec_score:
+        log.debug("Added %d to score for audio_codec being %r", audio_codec_score, media_info['audio_codec'])
     # score video codec
-    for codec, codec_score in cfg['VIDEO_CODEC_SCORES'].items():
-        if codec.lower() == media_info['video_codec'].lower():
-            score += int(codec_score)
-            log.debug("Added %d to score for video_codec being %r", int(codec_score), str(codec))
-            break
+    video_codec_score = VIDEO_CODEC_SCORES.get(media_info['video_codec'].lower(), 0)
+    score += video_codec_score
+    if video_codec_score:
+        log.debug("Added %d to score for video_codec being %r", video_codec_score, media_info['video_codec'])
     # score video resolution
-    for resolution, resolution_score in cfg['VIDEO_RESOLUTION_SCORES'].items():
-        if resolution.lower() == media_info['video_resolution'].lower():
-            score += int(resolution_score)
-            log.debug("Added %d to score for video_resolution being %r", int(resolution_score), str(resolution))
-            break
+    resolution_score = VIDEO_RESOLUTION_SCORES.get(media_info['video_resolution'].lower(), 0)
+    score += resolution_score
+    if resolution_score:
+        log.debug("Added %d to score for video_resolution being %r", resolution_score, media_info['video_resolution'])
     # score filename
-    for filename_keyword, keyword_score in cfg['FILENAME_SCORES'].items():
-        for filename in media_info['file']:
-            if fnmatch(os.path.basename(filename.lower()), filename_keyword.lower()):
-                score += int(keyword_score)
-                log.debug("Added %d to score for match filename_keyword %s", int(keyword_score), filename_keyword)
+    for filename in media_info['file']:
+        filename_score = get_filename_score(os.path.basename(filename).lower())
+        score += filename_score
+        if filename_score:
+            log.debug("Added %d to score for filename %s", filename_score, filename)
     # add bitrate to score
     score += int(media_info['video_bitrate']) * 2
     log.debug("Added %d to score for video bitrate", int(media_info['video_bitrate']) * 2)
@@ -116,6 +174,14 @@ def get_score(media_info):
         score += int(media_info['file_size']) / 100000
         log.debug("Added %d to score for total file size", int(media_info['file_size']) / 100000)
     return int(score)
+
+@lru_cache
+def get_filename_score(filename):
+    total_score = 0
+    for filename_keyword, keyword_score in FILENAME_SCORE_RULES:
+        if fnmatch(filename, filename_keyword):
+            total_score += keyword_score
+    return total_score
 
 
 def get_media_info(item):
@@ -200,9 +266,9 @@ def delete_item(show_key, media_id):
     delete_url = urljoin(cfg['PLEX_SERVER'], '%s/media/%d' % (show_key, media_id))
     log.debug("Sending DELETE request to %r" % delete_url)
     if requests.delete(delete_url, headers={'X-Plex-Token': cfg['PLEX_TOKEN']}).status_code == 200:
-        print("\t\tDeleted media item: %r" % media_id)
+        log.info("\t\tDeleted media item: %r" % media_id)
     else:
-        print("\t\tError deleting media item: %r" % media_id)
+        log.info("\t\tError deleting media item: %r" % media_id)
 
 
 ############################################################
@@ -210,7 +276,6 @@ def delete_item(show_key, media_id):
 ############################################################
 
 decision_filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'decisions.log')
-
 
 def write_decision(title=None, keeping=None, removed=None):
     lines = []
@@ -227,9 +292,15 @@ def write_decision(title=None, keeping=None, removed=None):
 
 
 def should_skip(files):
-    return any(skip_item in str(files_item) for files_item, skip_item in itertools.product(files, cfg['SKIP_LIST']))
+    return any(should_skip_path(str(files_item).lower()) for files_item in files)
 
 
+@lru_cache
+def should_skip_path(file_path):
+    return any(skip_item in file_path for skip_item in SKIP_LIST)
+
+
+@lru_cache
 def millis_to_string(millis):
     """ reference: https://stackoverflow.com/a/35990338 """
     try:
@@ -244,6 +315,7 @@ def millis_to_string(millis):
     return "%d milliseconds" % millis
 
 
+@lru_cache
 def bytes_to_string(size_bytes):
     """
     reference: https://stackoverflow.com/a/6547474
@@ -269,6 +341,7 @@ def bytes_to_string(size_bytes):
     return "%d bytes" % size_bytes
 
 
+@lru_cache
 def kbps_to_string(size_kbps):
     try:
         if size_kbps < 1024:
@@ -316,65 +389,84 @@ def build_tabulated(parts, items):
     return headers, part_data
 
 
+def process_section(section):
+    dupes = get_dupes(section)
+    section_results = {}
+    for item in dupes:
+        if item.type == 'episode':
+            title = "%s - %02dx%02d - %s" % (
+                item.grandparentTitle, int(item.parentIndex), int(item.index), item.title)
+        elif item.type == 'movie':
+            title = item.title
+        else:
+            title = 'Unknown'
+
+        log.info("Processing: %r", title)
+        parts = {}
+        for part in item.media:
+            part_info = get_media_info(part)
+            if not cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
+                part_info['score'] = get_score(part_info)
+            part_info['show_key'] = item.key
+            log.info("ID: %r - Score: %s - Meta:\n%r", part.id, part_info.get('score', 'N/A'),
+                     part_info)
+            parts[part.id] = part_info
+        section_results[title] = parts
+    return section, len(dupes), section_results
+
+
 ############################################################
 # MAIN
 ############################################################
 
 if __name__ == "__main__":
-    print("""
-       _                 _                   __ _           _
- _ __ | | _____  __   __| |_   _ _ __   ___ / _(_)_ __   __| | ___ _ __
-| '_ \| |/ _ \ \/ /  / _` | | | | '_ \ / _ \ |_| | '_ \ / _` |/ _ \ '__|
-| |_) | |  __/>  <  | (_| | |_| | |_) |  __/  _| | | | | (_| |  __/ |
-| .__/|_|\___/_/\_\  \__,_|\__,_| .__/ \___|_| |_|_| |_|\__,_|\___|_|
-|_|                             |_|
+    log.info(r"""
+        _                 _                   __ _           _
+    _ __ | | _____  __   __| |_   _ _ __   ___ / _(_)_ __   __| | ___ _ __
+    | '_ \| |/ _ \ \/ /  / _` | | | | '_ \ / _ \ |_| | '_ \ / _` |/ _ \ '__|
+    | |_) | |  __/>  <  | (_| | |_| | |_) |  __/  _| | | | | (_| |  __/ |
+    | .__/|_|\___/_/\_\  \__,_|\__,_| .__/ \___|_| |_|_| |_|\__,_|\___|_|
+    |_|                             |_|
 
-#########################################################################
-# Author:   l3uddz                                                      #
-# URL:      https://github.com/l3uddz/plex_dupefinder                   #
-# --                                                                    #
-#         Part of the Cloudbox project: https://cloudbox.works          #
-#########################################################################
-#                   GNU General Public License v3.0                     #
-#########################################################################
-""")
-    print("Initialized")
+    #########################################################################
+    # Author:   l3uddz                                                      #
+    # URL:      https://github.com/l3uddz/plex_dupefinder                   #
+    # --                                                                    #
+    #         Part of the Cloudbox project: https://cloudbox.works          #
+    #########################################################################
+    #                   GNU General Public License v3.0                     #
+    #########################################################################
+        """)
+    log.info("Initialized")
+
+    # Setup PlexServer object
+    try:
+        plex = PlexServer(cfg['PLEX_SERVER'], cfg['PLEX_TOKEN'])
+    except Exception as e:
+        log.exception("Exception connecting to server %r with token %r", cfg.get('PLEX_SERVER'), cfg.get('PLEX_TOKEN'))
+        log.error(f"Exception connecting to {cfg.get('PLEX_SERVER')} with token: {cfg.get('PLEX_TOKEN')}")
+        log.error(f"Error: {e}")
+        sys.exit(1)
+
     process_later = {}
     # process sections
-    print("Finding dupes...")
-    for section in cfg['PLEX_LIBRARIES']:
-        dupes = get_dupes(section)
-        print("Found %d dupes for section %r" % (len(dupes), section))
-        # loop returned duplicates
-        for item in dupes:
-            if item.type == 'episode':
-                title = "%s - %02dx%02d - %s" % (
-                    item.grandparentTitle, int(item.parentIndex), int(item.index), item.title)
-            elif item.type == 'movie':
-                title = item.title
-            else:
-                title = 'Unknown'
-
-            log.info("Processing: %r", title)
-            # loop returned parts for media item (copy 1, copy 2...)
-            parts = {}
-            for part in item.media:
-                part_info = get_media_info(part)
-                if not cfg['FIND_DUPLICATE_FILEPATHS_ONLY']:
-                    part_info['score'] = get_score(part_info)
-                part_info['show_key'] = item.key
-                log.info("ID: %r - Score: %s - Meta:\n%r", part.id, part_info.get('score', 'N/A'),
-                         part_info)
-                parts[part.id] = part_info
-            process_later[title] = parts
-
-    # process processed items
+    log.info("Finding dupes...")
+    max_workers = min(len(cfg['PLEX_LIBRARIES']), os.cpu_count() or 1)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        section_futures = {
+            section: executor.submit(process_section, section)
+            for section in cfg['PLEX_LIBRARIES']
+        }
+        for section in cfg['PLEX_LIBRARIES']:
+            _, dupe_count, section_results = section_futures[section].result()
+            log.info("Found %d dupes for section %r" % (dupe_count, section))
+            process_later.update(section_results)
     time.sleep(5)
     for item, parts in process_later.items():
         if not cfg['AUTO_DELETE']:
             partz = {}
             # manual delete
-            print("\nWhich media item do you wish to keep for %r ?\n" % item)
+            log.info("\nWhich media item do you wish to keep for %r ?\n" % item)
 
             sort_key = None
             sort_order = None
@@ -396,27 +488,27 @@ if __name__ == "__main__":
                 partz[media_id] = part_info
 
             headers, data = build_tabulated(partz, media_items)
-            print(tabulate(data, headers=headers))
+            log.info(tabulate(data, headers=headers))
 
             keep_item = input("\nChoose item to keep (0 or s = skip | 1 or b = best): ")
             if (keep_item.lower() != 's') and (keep_item.lower() == 'b' or 0 < int(keep_item) <= len(media_items)):
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if keep_item.lower() == 'b' and best_item is not None and best_item == part_info:
-                        print("\tKeeping  : %r" % media_id)
+                        log.info("\tKeeping  : %r" % media_id)
                         write_decision(keeping=part_info)
                     elif keep_item.lower() != 'b' and len(media_items) and media_id == media_items[int(keep_item)]:
-                        print("\tKeeping  : %r" % media_id)
+                        log.info("\tKeeping  : %r" % media_id)
                         write_decision(keeping=part_info)
                     else:
-                        print("\tRemoving : %r" % media_id)
+                        log.info("\tRemoving : %r" % media_id)
                         delete_item(part_info['show_key'], media_id)
                         write_decision(removed=part_info)
                         time.sleep(2)
             elif keep_item.lower() == 's' or int(keep_item) == 0:
-                print("Skipping deletion(s) for %r" % item)
+                log.info("Skipping deletion(s) for %r" % item)
             else:
-                print("Unexpected response, skipping deletion(s) for %r" % item)
+                log.info("Unexpected response, skipping deletion(s) for %r" % item)
         else:
             # auto delete
             print("\nDetermining best media item to keep for %r ..." % item)
@@ -444,15 +536,32 @@ if __name__ == "__main__":
                 write_decision(title=item)
                 for media_id, part_info in parts.items():
                     if media_id == keep_id:
-                        print("\tKeeping  : %r - %r" % (media_id, part_info['file']))
+                        log.info("\tKeeping  : %r - %r" % (media_id, part_info['file']))
                         write_decision(keeping=part_info)
                     else:
-                        print("\tRemoving : %r - %r" % (media_id, part_info['file']))
+                        log.info("\tRemoving : %r - %r" % (media_id, part_info['file']))
                         if should_skip(part_info['file']):
-                            print("\tSkipping removal of this item as there is a match in SKIP_LIST")
+                            log.info("\tSkipping removal of this item as there is a match in SKIP_LIST")
                             continue
                         delete_item(part_info['show_key'], media_id)
                         write_decision(removed=part_info)
                         time.sleep(2)
             else:
-                print("Unable to determine best media item to keep for %r", item)
+                log.info("Unable to determine best media item to keep for %r", item)
+
+    import time
+    import signal
+    import threading
+
+    stop_flag = threading.Event()
+
+    def handle_sigterm(signum, frame):
+        stop_flag.set()
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    signal.signal(signal.SIGINT, handle_sigterm)
+
+    start = time.time()
+    while time.time() - start < 600 and not stop_flag.is_set():
+        time.sleep(1)
+                
